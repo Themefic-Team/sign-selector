@@ -9,8 +9,18 @@ const mountSignSelector = (root) => {
 		return
 	}
 
+	const signSelectorConfig = window.SIGN_SELECTOR_CONFIG || {}
+	const pluginDirectoryUrl = signSelectorConfig.plugin_directory_url || ''
+
 	root.dataset[MOUNT_FLAG] = '1'
-	createApp(App).mount(root)
+	window.SIGN_SELECTOR_PLUGIN_URL = pluginDirectoryUrl
+
+	const app = createApp(App)
+	app.config.globalProperties.$signSelectorConfig = signSelectorConfig
+	app.config.globalProperties.$pluginDirectoryUrl = pluginDirectoryUrl
+	app.provide('signSelectorConfig', signSelectorConfig)
+	app.provide('pluginDirectoryUrl', pluginDirectoryUrl)
+	app.mount(root)
 }
 
 const mountAll = () => {

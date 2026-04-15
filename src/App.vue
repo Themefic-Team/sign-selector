@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useSignSelectorState } from './useSignSelectorState'
 
 const {
@@ -19,6 +19,8 @@ const {
   selectedSlateColor,
   selectedTemplate,
   selectedPaintColor,
+  selectedAddOn,
+  selectedHardware,
   totalPrice,
   payload,
   preview,
@@ -32,30 +34,256 @@ const {
 
 const formattedPayload = computed(() => JSON.stringify(payload.value, null, 2))
 
+const formatOptionLabel = (label) => label.replace(/\s*\((\+)?\$\d+\)\s*$/i, '')
+
+const getAspectRatio = (shape) => {
+  if (!shape?.width || !shape?.height) {
+    return '1 / 1'
+  }
+
+  return `${shape.width} / ${shape.height}`
+}
+
+const getShapeCardStyle = (shape) => ({
+  aspectRatio: getAspectRatio(shape),
+  width: shape?.id === 'round' ? '58px' : '100%',
+  height: 'auto',
+  marginInline: 'auto'
+})
+
+const getSlateChipStyle = (shape, imageUrl, hex) => ({
+  backgroundColor: hex,
+  backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
+  aspectRatio: getAspectRatio(shape),
+  width: shape?.id === 'round' ? '62px' : '100%',
+  height: 'auto',
+  marginInline: shape?.id === 'round' ? 'auto' : '0'
+})
+
+const getPreviewShapeStyle = (shape) => ({
+  aspectRatio: getAspectRatio(shape),
+  width: shape?.id === 'round' ? 'min(100%, 172px)' : shape?.id === 'oval' ? 'min(100%, 210px)' : 'min(100%, 240px)',
+  minHeight: 'auto'
+})
+
 const onSubmit = async () => {
-  await submitConfiguration()
+  let previewImageDataUrl = ''
+  let previewImageName = ''
+
+  try {
+    // Load an image cross-origin, resolves null silently on failure
+    const loadImg = (url) =>
+      new Promise((resolve) => {
+        if (!url) return resolve(null)
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+        // cache-bust to avoid stale CORS preflight blocks
+        img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now()
+      })
+
+    const CW = 800
+    const CH = 520
+    const canvas = document.createElement('canvas')
+    canvas.width = CW
+    canvas.height = CH
+    const ctx = canvas.getContext('2d')
+
+    // ── 1. Surface background ──────────────────────────
+    const surfaceImg = await loadImg(selectedSurface.value.imageUrl)
+    if (surfaceImg) {
+      ctx.drawImage(surfaceImg, 0, 0, CW, CH)
+    } else {
+      ctx.fillStyle = '#d9c9a8'
+      ctx.fillRect(0, 0, CW, CH)
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.14)'
+    ctx.fillRect(0, 0, CW, CH)
+
+    // ── 2. Sign dimensions ────────────────────────────
+    const shape = selectedShape.value
+    const shapeId = shape.id
+    const ratio = shape.width && shape.height ? shape.width / shape.height : 1
+    const isRound = shapeId === 'round'
+    const isOval = shapeId === 'oval'
+    const isArch = shapeId === 'arch'
+
+    let signW, signH
+    if (isRound) {
+      const d = Math.round(Math.min(CW, CH) * 0.52)
+      signW = d
+      signH = d
+    } else if (isOval) {
+      signW = Math.round(CW * 0.60)
+      signH = Math.round(signW / ratio)
+    } else {
+      // rectangle or arch
+      signW = Math.round(CW * 0.40)
+      signH = Math.round(signW / ratio)
+    }
+
+    // clamp so sign never overflows canvas
+    if (signH > CH * 0.84) {
+      signH = Math.round(CH * 0.84)
+      signW = Math.round(signH * ratio)
+    }
+
+    const sx = Math.round((CW - signW) / 2)
+    const sy = Math.round((CH - signH) / 2)
+    const cx = sx + signW / 2
+    const cy = sy + signH / 2
+
+    // ── 3. Reusable shape path builder ───────────────
+    const shapePath = () => {
+      ctx.beginPath()
+      if (isRound) {
+        ctx.arc(cx, cy, signW / 2, 0, Math.PI * 2)
+      } else if (isOval) {
+        ctx.ellipse(cx, cy, signW / 2, signH / 2, 0, 0, Math.PI * 2)
+      } else if (isArch) {
+        // Flat bottom with rounded dome top (matches UI preview)
+        const shoulderY = sy + signH * 0.56
+        ctx.moveTo(sx, sy + signH)
+        ctx.lineTo(sx, shoulderY)
+        ctx.quadraticCurveTo(sx, sy, cx, sy)
+        ctx.quadraticCurveTo(sx + signW, sy, sx + signW, shoulderY)
+        ctx.lineTo(sx + signW, sy + signH)
+        ctx.lineTo(sx, sy + signH)
+      } else {
+        // rectangle
+        const r = 12
+        ctx.moveTo(sx + r, sy)
+        ctx.lineTo(sx + signW - r, sy)
+        ctx.arcTo(sx + signW, sy, sx + signW, sy + r, r)
+        ctx.lineTo(sx + signW, sy + signH - r)
+        ctx.arcTo(sx + signW, sy + signH, sx + signW - r, sy + signH, r)
+        ctx.lineTo(sx + r, sy + signH)
+        ctx.arcTo(sx, sy + signH, sx, sy + signH - r, r)
+        ctx.lineTo(sx, sy + r)
+        ctx.arcTo(sx, sy, sx + r, sy, r)
+      }
+      ctx.closePath()
+    }
+
+    // ── 4. Draw sign fill + slate texture ────────────
+    ctx.save()
+    shapePath()
+    ctx.clip()
+
+    // solid slate base color
+    ctx.fillStyle = selectedSlateColor.value.hex || '#2b3239'
+    ctx.fillRect(sx - 1, sy - 1, signW + 2, signH + 2)
+
+    // Use the base slate texture image for export to avoid artifacts in pre-cut shape assets.
+    const slateImgUrl = selectedSlateColor.value.imageUrl
+    const slateImg = await loadImg(slateImgUrl)
+    if (slateImg) {
+      ctx.globalAlpha = 0.9
+      ctx.drawImage(slateImg, sx, sy, signW, signH)
+      ctx.globalAlpha = 1
+    }
+
+    // subtle dark overlay (matches CSS gradient overlay)
+    ctx.fillStyle = 'rgba(0,0,0,0.14)'
+    ctx.fillRect(sx - 1, sy - 1, signW + 2, signH + 2)
+
+    ctx.restore()
+
+    // ── 5. Sign border ────────────────────────────────
+    ctx.save()
+    shapePath()
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.restore()
+
+    // ── 6. Text (clipped inside sign) ────────────────
+    const paintHex = selectedPaintColor.value.hex || '#f2f4ef'
+    const paintTextureImg = await loadImg(selectedPaintColor.value.imageUrl)
+    const houseText = String(state.houseNumber || selectedTemplate.value.previewText || '183')
+    const streetText = String(state.bottomText || selectedTemplate.value.accentText || '').toUpperCase()
+
+    const numSize = Math.round(Math.min(signH * 0.38, signW * 0.30))
+    const streetSize = Math.round(numSize * 0.28)
+
+    ctx.save()
+    shapePath()
+    ctx.clip()
+    ctx.fillStyle = paintHex
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+
+    ctx.font = `bold ${numSize}px Georgia, "Times New Roman", serif`
+    const lineSpacing = streetText ? numSize * 0.08 : 0
+    const totalTextH = streetText ? numSize + lineSpacing + streetSize : numSize
+    const textStartY = cy - totalTextH / 2 + numSize
+
+    const drawTextWithPaint = (text, font, x, y) => {
+      if (!text) return
+
+      if (!paintTextureImg) {
+        ctx.fillStyle = paintHex
+        ctx.font = font
+        ctx.fillText(text, x, y)
+        return
+      }
+
+      const maskCanvas = document.createElement('canvas')
+      maskCanvas.width = CW
+      maskCanvas.height = CH
+      const maskCtx = maskCanvas.getContext('2d')
+
+      maskCtx.textAlign = 'center'
+      maskCtx.textBaseline = 'alphabetic'
+      maskCtx.font = font
+      maskCtx.fillStyle = '#fff'
+      maskCtx.fillText(text, x, y)
+
+      // Keep paint texture inside text glyphs.
+      maskCtx.globalCompositeOperation = 'source-in'
+      maskCtx.drawImage(paintTextureImg, sx, sy, signW, signH)
+
+      ctx.drawImage(maskCanvas, 0, 0)
+    }
+
+    drawTextWithPaint(houseText, `bold ${numSize}px Georgia, "Times New Roman", serif`, cx, textStartY)
+
+    if (streetText) {
+      drawTextWithPaint(streetText, `${streetSize}px Georgia, "Times New Roman", serif`, cx, textStartY + lineSpacing + streetSize + 4)
+    }
+
+    ctx.restore()
+
+    previewImageDataUrl = canvas.toDataURL('image/png', 0.92)
+    previewImageName = `sign-preview-${Date.now()}.png`
+  } catch (err) {
+    console.warn('Preview capture failed:', err)
+  }
+
+  await submitConfiguration({ previewImageDataUrl, previewImageName })
 }
 </script>
 
 <template>
   <section class="selector-root">
-    <div class="selector-shell">
-      <ol class="stepper" aria-label="Sign setup steps">
+    <div class="tf-selector-shell">
+      <ul class="tf-stepper" aria-label="Sign setup steps">
         <li
           v-for="step in stepDefinitions"
           :key="step.id"
-          class="step-item"
+          class="tf-step-item"
           :class="{
             active: state.currentStep === step.id,
             complete: state.currentStep > step.id
           }"
         >
-          <button type="button" class="step-btn" @click="setStep(step.id)">
-            <span class="dot" />
-            <span class="label">{{ step.title }}</span>
+          <button type="button" class="tf-step-btn" @click="setStep(step.id)">
+            <span class="tf-dot" />
+            <span class="tf-label">{{ step.title }}</span>
           </button>
         </li>
-      </ol>
+      </ul>
 
       <header class="hero">
         <h2>{{ stepDefinitions[state.currentStep - 1].heading }}</h2>
@@ -68,6 +296,7 @@ const onSubmit = async () => {
           :key="item.id"
           type="button"
           class="choice-card"
+          :aria-pressed="state.signStyleId === item.id"
           :class="{ selected: state.signStyleId === item.id }"
           @click="state.signStyleId = item.id"
         >
@@ -76,58 +305,85 @@ const onSubmit = async () => {
             <strong>{{ item.label }}</strong>
             <small>{{ item.description }}</small>
           </span>
+          <span v-if="state.signStyleId === item.id" class="choice-selected-indicator" aria-hidden="true" />
         </button>
       </div>
 
       <div v-if="state.currentStep === 2" class="split-layout">
         <div class="panel-stack">
-          <section class="panel">
-            <h3>Installation Surface</h3>
-            <div class="pill-grid">
+          <section class="panel installation-panel">
+            <h3 class="installation-title">
+              Installation Surface
+              <span class="info-dot" aria-hidden="true">i</span>
+            </h3>
+            <div class="surface-scroller">
+              <div class="pill-grid surface-grid">
               <button
                 v-for="item in installationSurfaces"
                 :key="item.id"
                 type="button"
-                class="tile"
+                class="tile surface-tile"
+                :aria-label="item.label"
                 :class="{ selected: state.surfaceId === item.id }"
                 @click="state.surfaceId = item.id"
               >
-                {{ item.label }}
+                <span class="surface-thumb" :style="{ backgroundImage: `url(${item.imageUrl})` }" />
+                <span class="sr-only">{{ item.label }}</span>
+                <span v-if="state.surfaceId === item.id" class="surface-check" aria-hidden="true" />
               </button>
+            </div>
             </div>
           </section>
 
-          <section class="panel">
-            <h3>Size & Shape</h3>
-            <div class="pill-grid">
+          <section class="panel size-panel">
+            <h3 class="panel-title-with-info">
+              Size & Shape
+              <span class="info-dot" aria-hidden="true">i</span>
+            </h3>
+            <div class="shape-grid">
               <button
                 v-for="item in shapes"
                 :key="item.id"
                 type="button"
-                class="tile"
+                class="tile shape-card"
                 :class="{ selected: state.shapeId === item.id }"
                 @click="state.shapeId = item.id"
               >
-                <span>{{ item.label }}</span>
-                <small>${{ item.basePrice.toFixed(2) }}</small>
+                <span class="shape-preview" :class="item.id" :style="getShapeCardStyle(item)">
+                  <span class="shape-dim">{{ item.label }}</span>
+                </span>
+                <small class="shape-price">${{ item.basePrice.toFixed(2) }}</small>
+                <span v-if="state.shapeId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
           </section>
 
-          <section class="panel">
-            <h3>Slate Color</h3>
-            <div class="swatch-grid">
+          <section class="panel slate-panel">
+            <h3 class="panel-title-with-info">
+              Slate Color
+              <span class="info-dot" aria-hidden="true">i</span>
+            </h3>
+            <div class="swatch-grid slate-grid">
               <button
                 v-for="item in slateColors"
                 :key="item.id"
                 type="button"
-                class="swatch"
+                class="swatch slate-card"
                 :class="{ selected: state.slateColorId === item.id }"
                 @click="state.slateColorId = item.id"
               >
-                <span class="swatch-chip" :style="{ background: item.hex }" />
-                <span>{{ item.label }}</span>
-                <small>${{ item.price.toFixed(2) }}</small>
+                <span
+                  class="swatch-chip slate-chip"
+                  :class="selectedShape.id"
+                  :style="getSlateChipStyle(
+                    selectedShape,
+                    item.images?.[selectedShape.id] || item.imageUrl,
+                    item.hex
+                  )"
+                />
+                <span class="slate-label">{{ item.label }}</span>
+                <small class="slate-price">${{ item.price.toFixed(2) }}</small>
+                <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
           </section>
@@ -136,9 +392,9 @@ const onSubmit = async () => {
         <aside class="preview-card">
           <header>Your Custom Sign</header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
-            <div class="preview-sign" :class="selectedShape.id" :style="preview.signStyle">
-              <span class="preview-number">{{ selectedTemplate.previewText }}</span>
-              <span class="preview-street">EAST STREET</span>
+            <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
+              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
             </div>
           </div>
           <ul class="spec-list">
@@ -169,20 +425,29 @@ const onSubmit = async () => {
             </div>
           </section>
 
-          <section class="panel">
-            <h3>Paint Color</h3>
-            <div class="swatch-grid">
+          <section class="panel paint-panel">
+            <h3 class="panel-title-with-info">
+              Paint Color
+              <span class="info-dot" aria-hidden="true">i</span>
+            </h3>
+            <div class="swatch-grid paint-grid">
               <button
                 v-for="item in paintColors"
                 :key="item.id"
                 type="button"
-                class="swatch"
+                class="swatch paint-card"
                 :class="{ selected: state.paintColorId === item.id }"
                 @click="state.paintColorId = item.id"
               >
-                <span class="swatch-chip" :style="{ background: item.hex }" />
-                <span>{{ item.label }}</span>
-                <small>${{ item.price.toFixed(2) }}</small>
+                <span
+                  class="paint-chip"
+                  :style="{
+                    backgroundImage: item.imageUrl ? `url('${item.imageUrl}')` : `rgba(0,0,0,0)`
+                  }"
+                />
+                <span class="paint-label">{{ item.label }}</span>
+                <span v-if="item.price > 0" class="paint-price">+${{ item.price.toFixed(0) }}</span>
+                <span v-if="state.paintColorId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
           </section>
@@ -191,12 +456,15 @@ const onSubmit = async () => {
         <aside class="preview-card">
           <header>Your Custom Sign</header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
-            <div class="preview-sign" :class="selectedShape.id" :style="preview.signStyle">
-              <span class="preview-number">{{ selectedTemplate.previewText }}</span>
-              <span class="preview-street">{{ selectedTemplate.accentText }}</span>
+            <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
+              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || selectedTemplate.accentText }}</span>
             </div>
           </div>
           <ul class="spec-list">
+            <li><span>Type</span><strong>{{ selectedSignStyle.label }}</strong></li>
+            <li><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
+            <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
             <li><span>Template</span><strong>{{ selectedTemplate.label }}</strong></li>
             <li><span>Paint</span><strong>{{ selectedPaintColor.label }}</strong></li>
             <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
@@ -207,7 +475,11 @@ const onSubmit = async () => {
 
       <div v-if="state.currentStep === 4" class="split-layout">
         <section class="panel review-panel">
-          <h3>Review Your Sign</h3>
+          <label class="field-label">House Number</label>
+          <input v-model="state.houseNumber" type="text" class="field-input" />
+
+          <label class="field-label">Bottom Text</label>
+          <input v-model="state.bottomText" type="text" class="field-input" placeholder="Street name or custom text" />
 
           <label class="field-label">Sign Style</label>
           <select v-model="state.signStyleId" class="field-input">
@@ -230,25 +502,32 @@ const onSubmit = async () => {
           </select>
         </section>
 
-        <aside class="preview-card">
-          <header>Order Summary</header>
-          <ul class="price-list">
-            <li><span>Shape & Size: {{ selectedShape.label }}</span><strong>${{ selectedShape.basePrice.toFixed(2) }}</strong></li>
-            <li><span>Slate Color: {{ selectedSlateColor.label }}</span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
-            <li><span>Template: {{ selectedTemplate.label }}</span><strong>${{ selectedTemplate.price.toFixed(2) }}</strong></li>
-            <li><span>Paint Color: {{ selectedPaintColor.label }}</span><strong>${{ selectedPaintColor.price.toFixed(2) }}</strong></li>
-            <li><span>Add-on</span><strong>${{ payload.pricing.addOn.toFixed(2) }}</strong></li>
-            <li><span>Hardware</span><strong>${{ payload.pricing.hardware.toFixed(2) }}</strong></li>
+        <aside class="preview-card summary-card">
+          <header>Order Summery</header>
+          <div class="preview-canvas" :style="preview.surfaceStyle">
+            <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
+              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || selectedTemplate.accentText }}</span>
+            </div>
+          </div>
+          <ul class="summary-list">
+            <li class="summary-item"><span>Shape &amp; Size: {{ selectedShape.label }}</span><strong>${{ selectedShape.basePrice.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Slate Color: {{ selectedSlateColor.label }}</span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Template: {{ selectedTemplate.label }}</span><strong>${{ selectedTemplate.price.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Paint Color: {{ selectedPaintColor.label }}</span><strong>${{ selectedPaintColor.price.toFixed(2) }}</strong></li>
+            <li class="summary-item-main"><span>{{ formatOptionLabel(selectedAddOn.label) }}</span><strong>+${{ payload.pricing.addOn.toFixed(2) }}</strong></li>
+            <li class="summary-item-main"><span>{{ formatOptionLabel(selectedHardware.label) }}</span><strong>+${{ payload.pricing.hardware.toFixed(2) }}</strong></li>
           </ul>
-          <p class="final-total"><span>Total</span><strong>${{ totalPrice.toFixed(2) }}</strong></p>
+          <p class="final-total"><span>Total:</span><strong>${{ totalPrice.toFixed(2) }}</strong></p>
+          <p class="summary-note">(before shipping &amp; taxes)</p>
         </aside>
       </div>
 
       <div class="footer-actions">
         <button type="button" class="ghost-btn" :disabled="isFirstStep" @click="prevStep">Back</button>
-        <small>Step {{ state.currentStep }} of 4</small>
-        <button v-if="!isLastStep" type="button" class="primary-btn" @click="nextStep">Continue</button>
-        <button v-else type="button" class="primary-btn" @click="onSubmit">Add to Cart</button>
+        <small class="footer-step">Step {{ state.currentStep }} of 4</small>
+        <button v-if="!isLastStep" type="button" class="tf-primary-btn" @click="nextStep">Continue</button>
+        <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
       </div>
 
       <section class="payload-box">
@@ -274,72 +553,133 @@ const onSubmit = async () => {
   padding: 32px 16px;
 }
 
-.selector-shell {
-  max-width: 1120px;
-  margin: 0 auto;
-  font-family: "Segoe UI", sans-serif;
-}
-
-.stepper {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+/* ── Stepper ─────────────────────────────────────── */
+.tf-stepper {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 20px 0 0;
+  display: flex;
+  align-items: flex-start;
 }
 
-.step-item {
+.tf-step-item {
+  flex: 1;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.step-item::before {
-  content: "";
+/* connector line – draws from center of this item to center of next */
+.tf-step-item:not(:last-child)::after {
+  content: '';
   position: absolute;
-  top: 13px;
-  left: calc(-50% + 13px);
-  width: calc(100% - 26px);
-  border-top: 2px solid var(--line);
-}
-
-.step-item:first-child::before {
-  display: none;
-}
-
-.step-item.complete::before,
-.step-item.active::before {
-  border-top-color: var(--accent);
-}
-
-.step-btn {
-  background: transparent;
-  border: 0;
-  padding: 0;
+  top: 10px;
+  left: 50%;
   width: 100%;
-  cursor: pointer;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
+  height: 1.5px;
+  background: var(--line);
+  z-index: 0;
 }
 
-.dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 3px solid #b9b7c7;
-  background: #fff;
+.tf-step-item.complete:not(:last-child)::after {
+  background: var(--accent);
+}
+
+/* button reset */
+.tf-step-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
   z-index: 1;
 }
 
-.step-item.active .dot,
-.step-item.complete .dot {
+/* dot – fixed 20×20 container keeps connector line always centred */
+.tf-dot {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* inactive: small hollow circle */
+.tf-dot::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid #c0bfcc;
+  background: var(--bg);
+  transition: width 0.2s, height 0.2s, background 0.2s, border-color 0.2s;
+}
+
+/* active: large filled purple */
+.tf-step-item.active .tf-dot::before {
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
   border-color: var(--accent);
 }
 
-.label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #4d4c5f;
+/* active: inner white dot */
+.tf-step-item.active .tf-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* complete: large filled purple */
+.tf-step-item.complete .tf-dot::before {
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* complete: white checkmark */
+.tf-step-item.complete .tf-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-50%, -62%) rotate(45deg);
+  z-index: 2;
+}
+
+/* labels */
+.tf-label {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: center;
+  transition: color 0.2s;
+  pointer-events: none;
+}
+
+.tf-step-item.active .tf-label {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .hero {
@@ -348,18 +688,26 @@ const onSubmit = async () => {
 }
 
 .hero h2 {
+  color: var(--Text-Title, #302F37); 
+  font-size: 40px; 
+  font-weight: 700;
+  line-height: 120%; 
   margin: 0;
-  font-size: clamp(30px, 4vw, 48px);
 }
 
 .hero p {
+  color: var(--Text-Paragraph, #4D4B58);
+  text-align: center;
+ 
+  font-size: 19px; 
+  font-weight: 400;
+  line-height: 140%; /* 26.6px */
   margin: 8px 0 0;
-  color: var(--muted);
 }
 
 .step-grid {
   display: grid;
-  gap: 18px;
+  gap: 20px;
 }
 
 .card-grid-2 {
@@ -367,52 +715,94 @@ const onSubmit = async () => {
 }
 
 .choice-card {
-  border: 2px solid var(--line);
-  background: #fff;
-  border-radius: 14px;
-  padding: 22px;
+  position: relative;
+  min-height: 110px;
+  border: 1.5px solid #d8d6df;
+  background: #f4f4f6;
+  border-radius: 12px;
+  padding: 20px 24px;
   text-align: left;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 14px;
-  box-shadow: var(--shadow);
+  gap: 16px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 
 .choice-card.selected {
-  border-color: var(--accent);
-  background: #ece9f7;
+  border-radius: 14px;
+  border: 2px solid var(--Primary-Default, #675D9A);
+  background: #E8E5F6;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.10), 0 4px 6px -4px rgba(0, 0, 0, 0.10); 
 }
 
 .choice-icon {
-  width: 52px;
-  height: 52px;
+  
   border-radius: 10px;
+  width: 56px;
+  height: 56px; 
   display: grid;
   place-items: center;
-  background: #d8d5e8;
-  font-size: 26px;
+  background: #d8d6e5;
+  color: #3a3946;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.choice-card.selected .choice-icon { 
+  color: #fff;
+  background: var(--Text-Title, #302F37);
 }
 
 .choice-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .choice-copy strong {
-  font-size: 22px;
+    color: var(--Text-Title, #302F37) !important; 
+    font-size: 28px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 120%; /* 33.6px */
 }
 
 .choice-copy small {
-  color: var(--muted);
-  font-size: 20px;
+  color: var(--Text-Paragraph, #4D4B58);
+ 
+  font-size: 16px;
+  font-style: normal; 
+  line-height: 160%; /* 25.6px */
+}
+
+.choice-selected-indicator {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice-selected-indicator::before {
+  content: '';
+  width: 6px;
+  height: 10px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translateY(-1px) rotate(45deg);
 }
 
 .split-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
+  align-items: start;
 }
 
 .panel-stack {
@@ -429,6 +819,11 @@ const onSubmit = async () => {
   border: 1px solid #e0dee8;
 }
 
+.preview-card {
+  position: sticky;
+  top: 20px;
+}
+
 .panel h3,
 .preview-card header {
   margin: 0 0 12px;
@@ -439,6 +834,68 @@ const onSubmit = async () => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.panel-title-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.installation-panel {
+  padding: 22px;
+}
+
+.installation-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.info-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #9f9ca7;
+  color: #7c7987;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.surface-scroller {
+  max-height: 296px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.surface-scroller::-webkit-scrollbar {
+  width: 8px;
+}
+
+.surface-scroller::-webkit-scrollbar-thumb {
+  background: #c8c7ce;
+  border-radius: 999px;
+}
+
+.surface-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.size-panel,
+.slate-panel {
+  padding: 20px;
+}
+
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .tile {
@@ -453,6 +910,133 @@ const onSubmit = async () => {
   gap: 3px;
 }
 
+.surface-tile {
+  position: relative;
+  padding: 10px;
+  min-height: 0;
+  border: 1.5px solid #c8c6b7;
+  border-radius: 14px;
+  background: #fdfcf8;
+}
+
+.shape-card,
+.slate-card {
+  position: relative;
+  border: 1px solid #cfcdc0;
+  border-radius: 8px;
+  background: #fbfaf5;
+}
+
+.shape-card {
+  padding: 8px;
+  align-items: center;
+  gap: 7px;
+}
+
+.shape-preview {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: linear-gradient(135deg, #5f666f 0%, #2b3239 100%);
+  color: #f4f4f4;
+  display: grid;
+  place-items: center;
+  margin-inline: auto;
+}
+
+.shape-preview.rectangle {
+  border-radius: 6px;
+}
+
+.shape-preview.oval {
+  border-radius: 50%;
+}
+
+.shape-preview.arch {
+  border-radius: 50%;
+}
+
+.shape-preview.round {
+  border-radius: 50%;
+}
+
+.shape-dim {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.shape-price {
+  font-size: 15px;
+  line-height: 1.2;
+  color: #3e3d48;
+  font-weight: 600;
+}
+
+.surface-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.surface-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.surface-check::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 10px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-50%, -62%) rotate(45deg);
+}
+
+.option-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.option-check::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-50%, -64%) rotate(45deg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .tile.selected,
 .swatch.selected {
   border-color: var(--accent);
@@ -460,10 +1044,22 @@ const onSubmit = async () => {
   background: #edeaf8;
 }
 
+.shape-card.selected,
+.slate-card.selected {
+  border-color: #6f62a6;
+  box-shadow: inset 0 0 0 1px #6f62a6;
+  background: #e8e5f6;
+}
+
 .swatch-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.slate-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .swatch {
@@ -478,11 +1074,113 @@ const onSubmit = async () => {
   text-align: left;
 }
 
+.slate-card {
+  padding: 8px;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
 .swatch-chip {
   width: 100%;
   height: 30px;
   border-radius: 6px;
   border: 1px solid #ccc;
+}
+
+.slate-chip {
+  border-radius: 6px;
+  /* background-size: cover; */
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.slate-chip.rectangle {
+  border-radius: 6px;
+}
+
+.slate-chip.oval,
+.slate-chip.oval {
+  border-radius: 50%;
+}
+
+.slate-chip.arch {
+  border-radius: 18px 18px 6px 6px;
+}
+
+.slate-chip.round {
+  border-radius: 50%;
+  margin-inline: auto;
+}
+
+.slate-label {
+  font-size: 15px;
+  line-height: 1.2;
+  color: #383741;
+  font-weight: 600;
+}
+
+.slate-price {
+  font-size: 28px;
+  line-height: 1.2;
+  color: #575666;
+}
+
+/* ── Paint Color grid ──────────────────────────────── */
+.paint-panel {
+  padding: 20px;
+}
+
+.paint-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.paint-card {
+  position: relative;
+  border: 1px solid #cfcdc0;
+  border-radius: 8px;
+  background: #fbfaf5;
+  padding: 8px;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.paint-card.selected {
+  border-color: #6f62a6;
+  box-shadow: inset 0 0 0 1px #6f62a6;
+  background: #e8e5f6;
+}
+
+.paint-chip {
+  display: block;
+  width: 100%;
+  height: 80px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.paint-label {
+  font-size: 13px;
+  line-height: 1.2;
+  color: #383741;
+  font-weight: 600;
+}
+
+.paint-price {
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
+  background: #e03e3e;
+  border-radius: 20px;
+  padding: 2px 7px;
+  position: absolute;
+  top: 6px;
+  left: 6px;
 }
 
 .preview-canvas {
@@ -495,8 +1193,6 @@ const onSubmit = async () => {
 }
 
 .preview-sign {
-  width: 220px;
-  min-height: 110px;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -508,7 +1204,7 @@ const onSubmit = async () => {
 }
 
 .preview-sign.oval {
-  border-radius: 999px;
+  border-radius: 90%;
 }
 
 .preview-sign.rectangle {
@@ -516,13 +1212,11 @@ const onSubmit = async () => {
 }
 
 .preview-sign.arch {
-  border-radius: 22px 22px 10px 10px;
+  border-radius: 50%;
 }
 
 .preview-sign.round {
-  width: 170px;
-  height: 170px;
-  border-radius: 999px;
+  border-radius: 50%;
 }
 
 .preview-number {
@@ -561,52 +1255,152 @@ const onSubmit = async () => {
 
 .review-panel {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: start;
 }
 
 .field-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 500;
+  color: #2f3040;
+  margin-top: 4px;
 }
 
 .field-input {
-  border: 1px solid #d1cfda;
-  border-radius: 8px;
+  border: 1px solid #d5d3cc;
+  border-radius: 4px;
   background: #fff;
-  padding: 10px;
+  padding: 10px 12px;
+  min-height: 42px;
+  font-size: 15px;
+  color: #4c4b57;
+}
+
+.summary-card {
+  padding: 16px 16px 18px;
+}
+
+.summary-card header {
+  margin-bottom: 14px;
+  font-size: 32px;
+  font-weight: 500;
+  color: #2f3040;
+}
+
+.summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.summary-item,
+.summary-item-main,
+.final-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.summary-item span {
+  color: #5f5d6d;
+}
+
+.summary-item strong,
+.summary-item-main strong {
+  color: #2f3040;
+  font-weight: 500;
+}
+
+.summary-item-main {
+  margin-top: 10px;
+  color: #2f3040;
+}
+
+.final-total {
+  border-top: 1px solid #dad8e1;
+  margin-top: 16px;
+  padding-top: 14px;
+  font-size: 28px;
+  color: #2f3040;
+}
+
+.summary-note {
+  margin: 2px 0 0;
+  text-align: right;
+  color: #8a8896;
+  font-size: 12px;
 }
 
 .footer-actions {
-  margin-top: 16px;
+  margin-top: 22px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 96px 1fr 132px;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.primary-btn,
+.tf-primary-btn,
 .ghost-btn {
-  border-radius: 8px;
+  min-height: 44px;
+  border-radius: 9px;
   padding: 10px 18px;
   border: 1px solid transparent;
   cursor: pointer;
+  line-height: 1;
+  font-weight: 500;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
 
-.primary-btn {
-  background: var(--accent);
-  color: #fff;
+.tf-primary-btn { 
+  
+  font-size: 28px;
+  padding: 10px 24px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--Primary-Default, #675D9A);
+  background: var(--Primary-Default, #675D9A);
+  color: var(--Fill-White, #FFF);
+  text-align: center;
+ 
+  font-size: 16px; 
+  font-weight: 600;
+  line-height: 160%; /* 25.6px */
 }
 
 .ghost-btn {
-  background: transparent;
-  border-color: #d6d5dc;
-  color: #47465a;
+  background: #f0f0e4;
+  border-color: #dddbce;
+  color: #7f7c71;
+  width: 84px;
 }
 
 .ghost-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+ color: var(--Border-Default, #D4D4C4);
+text-align: center;
+ 
+font-size: 16px; 
+font-weight: 600;
+line-height: 160%; /* 25.6px */
+padding: 10px 24px;
+justify-content: center;
+align-items: center;
+gap: 8px;
+border-radius: 8px;
+border: 1px solid var(--Border-Faint, #EEEEE7);
+}
+
+.footer-step {
+  color: var(--Text-Faint, #605E6E);
+  text-align: center;
+  
+  font-size: 13px; 
+  font-weight: 400;
+  line-height: 150%; /* 19.5px */
 }
 
 .payload-box {
@@ -635,16 +1429,43 @@ const onSubmit = async () => {
     grid-template-columns: 1fr;
   }
 
-  .stepper {
-    gap: 4px;
+  .surface-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .shape-grid,
+  .slate-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+ 
   .label {
     font-size: 11px;
   }
 
   .choice-copy strong {
-    font-size: 20px;
+    font-size: clamp(20px, 6vw, 28px);
+  }
+
+  .choice-copy small {
+    font-size: clamp(14px, 4vw, 18px);
+  }
+
+  .choice-card {
+    min-height: 100px;
+    padding: 18px;
+  }
+
+  .choice-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+
+  .tf-label {
+    white-space: normal;
+    font-size: 11px;
+    max-width: 72px;
   }
 }
 
@@ -654,9 +1475,50 @@ const onSubmit = async () => {
     grid-template-columns: 1fr;
   }
 
+  .surface-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .shape-grid,
+  .slate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .installation-panel {
+    padding: 14px;
+  }
+
+  .surface-scroller {
+    max-height: 264px;
+  }
+
   .footer-actions {
-    grid-template-columns: 1fr;
-    text-align: center;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'step step'
+      'back next';
+    gap: 12px;
+  }
+
+  .footer-step {
+    grid-area: step;
+    font-size: 18px;
+  }
+
+  .ghost-btn {
+    grid-area: back;
+    width: 100%;
+  }
+
+  .primary-btn {
+    grid-area: next;
+    width: 100%;
+  }
+
+  .tf-label {
+    font-size: 10px;
+    max-width: 56px;
   }
 }
 </style>

@@ -38,12 +38,18 @@ class SignSelector {
         add_action( 'init', array( $this, 'init' ) ); 
     }
     public function init() {
-        
         add_action( 'wp_enqueue_scripts', [ $this, 'register_assets' ] );
         add_filter( 'script_loader_tag', [ $this, 'tf_loadScriptAsModule' ], 10, 3 );
         add_shortcode( 'sign_selector', [ $this, 'render_shortcode' ] );
         add_action( 'wp_ajax_sign_selector_save_configuration', [ $this, 'handle_save_configuration' ] );
         add_action( 'wp_ajax_nopriv_sign_selector_save_configuration', [ $this, 'handle_save_configuration' ] );
+
+        if ( class_exists( 'WooCommerce' ) ) {
+            add_filter( 'woocommerce_get_item_data', [ $this, 'render_cart_item_meta' ], 10, 2 );
+            add_action( 'woocommerce_before_calculate_totals', [ $this, 'apply_sign_selector_cart_price' ], 20 );
+            add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'add_order_item_meta' ], 10, 4 );
+            add_filter( 'woocommerce_cart_item_name', [ $this, 'append_edit_item_link' ], 10, 3 );
+        }
     }
 
     public function tf_loadScriptAsModule( $tag, $handle, $src ) {
@@ -93,6 +99,13 @@ class SignSelector {
     }
 
     public function render_shortcode() {
+        if ( is_singular() ) {
+            $selector_page_url = get_permalink();
+            if ( is_string( $selector_page_url ) && ! empty( $selector_page_url ) ) {
+                update_option( 'sign_selector_page_url', esc_url_raw( $selector_page_url ), false );
+            }
+        }
+
         $this->localize_frontend_data();
         wp_enqueue_script( 'tf-core-sign-selector' );
 
@@ -112,13 +125,19 @@ class SignSelector {
      * Pass AJAX config to the frontend app.
      */
     private function localize_frontend_data() {
+        $edit_context = $this->get_edit_context();
+
         wp_localize_script(
             'tf-core-sign-selector',
             'SIGN_SELECTOR_CONFIG',
             array(
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'plugin_directory_url' => SIGN_SELECTOR_URL,
                 'action'  => 'sign_selector_save_configuration',
                 'nonce'   => wp_create_nonce( 'sign_selector_nonce' ),
+                'cartUrl' => function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '',
+                'editCartItemKey' => $edit_context['editCartItemKey'],
+                'initialConfiguration' => $edit_context['initialConfiguration'],
             )
         );
     }
@@ -128,6 +147,26 @@ class SignSelector {
      */
     public function handle_save_configuration() {
         check_ajax_referer( 'sign_selector_nonce', 'nonce' );
+
+        if ( ! class_exists( 'WooCommerce' ) || ! function_exists( 'WC' ) ) {
+            wp_send_json_error(
+                array(
+                    'message' => __( 'WooCommerce is required for this action.', 'sign-selector' ),
+                ),
+                400
+            );
+        }
+
+        $this->ensure_cart_loaded();
+
+        if ( ! WC()->cart ) {
+            wp_send_json_error(
+                array(
+                    'message' => __( 'Could not initialize the WooCommerce cart session.', 'sign-selector' ),
+                ),
+                400
+            );
+        }
 
         $raw_configuration = isset( $_POST['configuration'] ) ? wp_unslash( $_POST['configuration'] ) : '';
         $decoded           = is_string( $raw_configuration ) ? json_decode( $raw_configuration, true ) : array();
@@ -141,13 +180,225 @@ class SignSelector {
             );
         }
 
+        $preview_data_url = '';
+        if ( ! empty( $decoded['checkout']['previewImageDataUrl'] ) && is_string( $decoded['checkout']['previewImageDataUrl'] ) ) {
+            $preview_data_url = $decoded['checkout']['previewImageDataUrl'];
+        }
+
+        // Never keep raw base64 image data inside the configuration structure.
+        if ( isset( $decoded['checkout']['previewImageDataUrl'] ) ) {
+            unset( $decoded['checkout']['previewImageDataUrl'] );
+        }
+
         $configuration = $this->sanitize_configuration_data( $decoded );
+
+        if ( ! $this->is_valid_configuration( $configuration ) ) {
+            wp_send_json_error(
+                array(
+                    'message' => __( 'Please complete the required sign options before adding to cart.', 'sign-selector' ),
+                ),
+                422
+            );
+        }
+
+        $product_id = $this->get_or_create_sign_product_id();
+        if ( ! $product_id ) {
+            wp_send_json_error(
+                array(
+                    'message' => __( 'Could not prepare sign product for cart.', 'sign-selector' ),
+                ),
+                500
+            );
+        }
+
+        $edit_key = isset( $configuration['checkout']['editCartItemKey'] ) ? sanitize_text_field( $configuration['checkout']['editCartItemKey'] ) : '';
+        $quantity = 1;
+
+        if ( ! empty( $edit_key ) ) {
+            $current_cart = WC()->cart->get_cart();
+            if ( isset( $current_cart[ $edit_key ] ) ) {
+                $quantity = max( 1, (int) $current_cart[ $edit_key ]['quantity'] );
+                WC()->cart->remove_cart_item( $edit_key );
+            }
+        }
+
+        $preview_name = isset( $configuration['checkout']['previewImageName'] ) ? (string) $configuration['checkout']['previewImageName'] : '';
+        $preview_file = $this->save_preview_image( $preview_data_url, $preview_name );
+
+        if ( ! empty( $preview_file['url'] ) ) {
+            $configuration['checkout']['previewImageUrl'] = $preview_file['url'];
+        }
+
+        unset( $configuration['checkout']['previewImageDataUrl'], $configuration['checkout']['previewImagePath'] );
+
+        $cart_item_data = array(
+            'sign_selector_configuration' => $configuration,
+            'sign_selector_unique_key'    => md5( wp_json_encode( $configuration ) . microtime( true ) ),
+        );
+
+        $cart_item_key = WC()->cart->add_to_cart( $product_id, $quantity, 0, array(), $cart_item_data );
+
+        if ( ! $cart_item_key ) {
+            wp_send_json_error(
+                array(
+                    'message' => __( 'Could not add sign configuration to cart.', 'sign-selector' ),
+                ),
+                500
+            );
+        }
 
         wp_send_json_success(
             array(
-                'message'       => __( 'Configuration received.', 'sign-selector' ),
+                'message'       => __( 'Configuration added to cart.', 'sign-selector' ),
                 'configuration' => $configuration,
+                'cartItemKey'   => $cart_item_key,
+                'cartUrl'       => wc_get_cart_url(),
             )
+        );
+    }
+
+    /**
+     * Show sign configuration info under cart item rows.
+     *
+     * @param array<string,mixed> $item_data Item metadata rows.
+     * @param array<string,mixed> $cart_item Cart item.
+     * @return array<string,mixed>
+     */
+    public function render_cart_item_meta( $item_data, $cart_item ) {
+        if ( empty( $cart_item['sign_selector_configuration'] ) || ! is_array( $cart_item['sign_selector_configuration'] ) ) {
+            return $item_data;
+        }
+
+        $config = $cart_item['sign_selector_configuration'];
+
+        $meta_map = array(
+            __( 'House Number', 'sign-selector' ) => $config['checkout']['houseNumber'] ?? '',
+            __( 'Bottom Text', 'sign-selector' ) => $config['checkout']['bottomText'] ?? '',
+            __( 'Sign Style', 'sign-selector' ) => $config['sign']['style']['label'] ?? '',
+            __( 'Shape', 'sign-selector' ) => $config['sign']['shape']['label'] ?? '',
+            __( 'Slate', 'sign-selector' ) => $config['sign']['slateColor']['label'] ?? '',
+            __( 'Template', 'sign-selector' ) => $config['sign']['template']['label'] ?? '',
+            __( 'Paint', 'sign-selector' ) => $config['sign']['paintColor']['label'] ?? '',
+            __( 'Add-on', 'sign-selector' ) => $config['sign']['addOn']['label'] ?? '',
+            __( 'Hardware', 'sign-selector' ) => $config['sign']['hardware']['label'] ?? '',
+        );
+
+        foreach ( $meta_map as $label => $value ) {
+            if ( '' === (string) $value ) {
+                continue;
+            }
+
+            $item_data[] = array(
+                'name'  => $label,
+                'value' => wp_kses_post( $value ),
+            );
+        }
+
+        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+            $item_data[] = array(
+                'name'  => __( 'Preview', 'sign-selector' ),
+                'value' => sprintf( '<a href="%1$s" target="_blank" rel="noopener">%2$s</a>', esc_url( $config['checkout']['previewImageUrl'] ), esc_html__( 'View image', 'sign-selector' ) ),
+            );
+        }
+
+        return $item_data;
+    }
+
+    /**
+     * Apply custom line item price from the submitted configuration total.
+     *
+     * @param WC_Cart $cart WooCommerce cart object.
+     * @return void
+     */
+    public function apply_sign_selector_cart_price( $cart ) {
+        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+            return;
+        }
+
+        if ( ! $cart || ! method_exists( $cart, 'get_cart' ) ) {
+            return;
+        }
+
+        foreach ( $cart->get_cart() as $cart_item ) {
+            if ( empty( $cart_item['sign_selector_configuration']['pricing']['total'] ) || empty( $cart_item['data'] ) ) {
+                continue;
+            }
+
+            $price = (float) $cart_item['sign_selector_configuration']['pricing']['total'];
+            if ( $price > 0 ) {
+                $cart_item['data']->set_price( $price );
+            }
+        }
+    }
+
+    /**
+     * Persist sign metadata to order items.
+     *
+     * @param WC_Order_Item_Product $item Order item.
+     * @param string                $cart_item_key Cart item key.
+     * @param array<string,mixed>   $values Cart values.
+     * @param WC_Order              $order Order.
+     * @return void
+     */
+    public function add_order_item_meta( $item, $cart_item_key, $values, $order ) {
+        if ( empty( $values['sign_selector_configuration'] ) || ! is_array( $values['sign_selector_configuration'] ) ) {
+            return;
+        }
+
+        $config = $values['sign_selector_configuration'];
+
+        $meta_map = array(
+            __( 'House Number', 'sign-selector' ) => $config['checkout']['houseNumber'] ?? '',
+            __( 'Bottom Text', 'sign-selector' ) => $config['checkout']['bottomText'] ?? '',
+            __( 'Sign Style', 'sign-selector' ) => $config['sign']['style']['label'] ?? '',
+            __( 'Shape', 'sign-selector' ) => $config['sign']['shape']['label'] ?? '',
+            __( 'Slate', 'sign-selector' ) => $config['sign']['slateColor']['label'] ?? '',
+            __( 'Template', 'sign-selector' ) => $config['sign']['template']['label'] ?? '',
+            __( 'Paint', 'sign-selector' ) => $config['sign']['paintColor']['label'] ?? '',
+            __( 'Add-on', 'sign-selector' ) => $config['sign']['addOn']['label'] ?? '',
+            __( 'Hardware', 'sign-selector' ) => $config['sign']['hardware']['label'] ?? '',
+        );
+
+        foreach ( $meta_map as $label => $value ) {
+            if ( '' === (string) $value ) {
+                continue;
+            }
+
+            $item->add_meta_data( $label, wp_kses_post( $value ) );
+        }
+
+        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+            $item->add_meta_data( __( 'Preview Image', 'sign-selector' ), esc_url_raw( $config['checkout']['previewImageUrl'] ) );
+        }
+
+        // Keep technical keys hidden from customer/admin order item meta views.
+        $item->add_meta_data( '_sign_selector_cart_item_key', $cart_item_key );
+    }
+
+    /**
+     * Add an edit link for sign-selector items in cart.
+     *
+     * @param string               $item_name Existing item name HTML.
+     * @param array<string,mixed>  $cart_item Cart item data.
+     * @param string               $cart_item_key Cart key.
+     * @return string
+     */
+    public function append_edit_item_link( $item_name, $cart_item, $cart_item_key ) {
+        if ( empty( $cart_item['sign_selector_configuration'] ) ) {
+            return $item_name;
+        }
+
+        $selector_page_url = $this->get_selector_page_url();
+        if ( empty( $selector_page_url ) ) {
+            return $item_name;
+        }
+
+        $edit_url = add_query_arg( 'sign_selector_edit_item', rawurlencode( $cart_item_key ), $selector_page_url );
+
+        return $item_name . sprintf(
+            ' <br><small><a href="%1$s">%2$s</a></small>',
+            esc_url( $edit_url ),
+            esc_html__( 'Edit item', 'sign-selector' )
         );
     }
 
@@ -178,6 +429,172 @@ class SignSelector {
         }
 
         return '';
+    }
+
+    /**
+     * Ensure a cart instance exists for guest and authenticated users.
+     *
+     * @return void
+     */
+    private function ensure_cart_loaded() {
+        if ( function_exists( 'wc_load_cart' ) ) {
+            wc_load_cart();
+        }
+    }
+
+    /**
+     * Validate required payload fields before adding to cart.
+     *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return bool
+     */
+    private function is_valid_configuration( $configuration ) {
+        if ( empty( $configuration['sign']['shape']['id'] ) || empty( $configuration['sign']['style']['id'] ) ) {
+            return false;
+        }
+
+        if ( empty( $configuration['pricing']['total'] ) || (float) $configuration['pricing']['total'] <= 0 ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get or create a hidden product for custom sign cart items.
+     *
+     * @return int
+     */
+    private function get_or_create_sign_product_id() {
+        $stored_id = (int) get_option( 'sign_selector_product_id', 0 );
+        if ( $stored_id > 0 ) {
+            $product = wc_get_product( $stored_id );
+            if ( $product instanceof WC_Product ) {
+                return $stored_id;
+            }
+        }
+
+        $product = new WC_Product_Simple();
+        $product->set_name( __( 'Custom Sign Configuration', 'sign-selector' ) );
+        $product->set_status( 'publish' );
+        $product->set_catalog_visibility( 'hidden' );
+        $product->set_virtual( true );
+        $product->set_regular_price( '1' );
+        $product->set_price( '1' );
+        $product->set_description( __( 'Hidden placeholder product used for custom configured signs.', 'sign-selector' ) );
+
+        $product_id = $product->save();
+        if ( $product_id ) {
+            update_option( 'sign_selector_product_id', (int) $product_id, false );
+        }
+
+        return (int) $product_id;
+    }
+
+    /**
+     * Resolve selector page URL for edit-item links.
+     *
+     * @return string
+     */
+    private function get_selector_page_url() {
+        $stored_url = get_option( 'sign_selector_page_url', '' );
+
+        return is_string( $stored_url ) ? $stored_url : '';
+    }
+
+    /**
+     * Load editable cart-item payload when user opens selector from cart edit link.
+     *
+     * @return array<string,mixed>
+     */
+    private function get_edit_context() {
+        $context = array(
+            'editCartItemKey' => '',
+            'initialConfiguration' => array(),
+        );
+
+        $raw_key = isset( $_GET['sign_selector_edit_item'] ) ? wp_unslash( $_GET['sign_selector_edit_item'] ) : '';
+        $cart_item_key = sanitize_text_field( $raw_key );
+
+        if ( empty( $cart_item_key ) || ! class_exists( 'WooCommerce' ) || ! function_exists( 'WC' ) ) {
+            return $context;
+        }
+
+        $this->ensure_cart_loaded();
+
+        if ( ! WC()->cart ) {
+            return $context;
+        }
+
+        $cart_contents = WC()->cart->get_cart();
+        if ( empty( $cart_contents[ $cart_item_key ]['sign_selector_configuration'] ) ) {
+            return $context;
+        }
+
+        $context['editCartItemKey'] = $cart_item_key;
+        $context['initialConfiguration'] = $cart_contents[ $cart_item_key ]['sign_selector_configuration'];
+
+        return $context;
+    }
+
+    /**
+     * Save base64 preview image to uploads/tf-sign-selector.
+     *
+     * @param string $preview_data_url Base64 image string.
+     * @param string $preview_name Optional file name from frontend.
+     * @return array<string,string>
+     */
+    private function save_preview_image( $preview_data_url, $preview_name = '' ) {
+        $result = array(
+            'path' => '',
+            'url'  => '',
+        );
+
+        if ( empty( $preview_data_url ) || ! is_string( $preview_data_url ) ) {
+            return $result;
+        }
+
+        if ( 0 !== strpos( $preview_data_url, 'data:image/' ) ) {
+            return $result;
+        }
+
+        if ( ! preg_match( '/^data:image\/(png|jpe?g);base64,(.+)$/', $preview_data_url, $matches ) ) {
+            return $result;
+        }
+
+        $extension = 'jpeg' === $matches[1] ? 'jpg' : $matches[1];
+        $binary    = base64_decode( str_replace( ' ', '+', $matches[2] ) );
+
+        if ( false === $binary ) {
+            return $result;
+        }
+
+        $uploads = wp_upload_dir();
+        if ( ! empty( $uploads['error'] ) ) {
+            return $result;
+        }
+
+        $target_dir = trailingslashit( $uploads['basedir'] ) . 'tf-sign-selector';
+        if ( ! wp_mkdir_p( $target_dir ) ) {
+            return $result;
+        }
+
+        $base_name = ! empty( $preview_name ) ? sanitize_file_name( pathinfo( $preview_name, PATHINFO_FILENAME ) ) : 'sign-preview';
+        if ( empty( $base_name ) ) {
+            $base_name = 'sign-preview';
+        }
+
+        $file_name = sprintf( '%1$s-%2$s.%3$s', $base_name, wp_generate_password( 8, false, false ), $extension );
+        $file_path = trailingslashit( $target_dir ) . $file_name;
+
+        if ( false === file_put_contents( $file_path, $binary ) ) {
+            return $result;
+        }
+
+        $result['path'] = $file_path;
+        $result['url']  = trailingslashit( $uploads['baseurl'] ) . 'tf-sign-selector/' . $file_name;
+
+        return $result;
     }
 
     /**
