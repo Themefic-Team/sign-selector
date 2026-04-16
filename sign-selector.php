@@ -15,9 +15,12 @@
 
 // don't load directly
 defined( 'ABSPATH' ) || exit;
-// 
+
+require_once __DIR__ . '/includes/class-sign-selector-admin.php';
 
 class SignSelector {
+    /** @var Sign_Selector_Admin */
+    private $admin;
     public function __construct() {
         // constants
         if ( ! defined( 'SIGN_SELECTOR_VERSION' ) ) {
@@ -33,8 +36,9 @@ class SignSelector {
             define( 'SIGN_SELECTOR_DEV_MODE', true );
         }
 
-        // add content into footer
-        // add_action( 'wp_footer', [ $this, 'render_app_container' ] );
+        // Admin settings
+        $this->admin = new Sign_Selector_Admin();
+
         add_action( 'init', array( $this, 'init' ) ); 
     }
     public function init() {
@@ -126,6 +130,7 @@ class SignSelector {
      */
     private function localize_frontend_data() {
         $edit_context = $this->get_edit_context();
+        $configurator_data = $this->admin->get_frontend_data();
 
         wp_localize_script(
             'tf-core-sign-selector',
@@ -138,6 +143,7 @@ class SignSelector {
                 'cartUrl' => function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '',
                 'editCartItemKey' => $edit_context['editCartItemKey'],
                 'initialConfiguration' => $edit_context['initialConfiguration'],
+                'configurator' => $configurator_data,
             )
         );
     }
@@ -201,7 +207,7 @@ class SignSelector {
             );
         }
 
-        $product_id = $this->get_or_create_sign_product_id();
+        $product_id = $this->get_or_create_sign_product_id( $configuration );
         if ( ! $product_id ) {
             wp_send_json_error(
                 array(
@@ -239,9 +245,15 @@ class SignSelector {
         $cart_item_key = WC()->cart->add_to_cart( $product_id, $quantity, 0, array(), $cart_item_data );
 
         if ( ! $cart_item_key ) {
+            $wc_notices = wc_get_notices( 'error' );
+            wc_clear_notices();
+            $notice_msg = '';
+            if ( ! empty( $wc_notices ) ) {
+                $notice_msg = wp_strip_all_tags( $wc_notices[0]['notice'] ?? ( is_string( $wc_notices[0] ) ? $wc_notices[0] : '' ) );
+            }
             wp_send_json_error(
                 array(
-                    'message' => __( 'Could not add sign configuration to cart.', 'sign-selector' ),
+                    'message' => $notice_msg ? $notice_msg : __( 'Could not add sign configuration to cart.', 'sign-selector' ),
                 ),
                 500
             );
@@ -413,7 +425,7 @@ class SignSelector {
             $sanitized = array();
 
             foreach ( $value as $key => $item ) {
-                $safe_key              = is_string( $key ) ? sanitize_key( $key ) : $key;
+                $safe_key              = is_string( $key ) ? preg_replace( '/[^a-zA-Z0-9_\-]/', '', $key ) : $key;
                 $sanitized[ $safe_key ] = $this->sanitize_configuration_data( $item );
             }
 
@@ -461,30 +473,140 @@ class SignSelector {
     }
 
     /**
-     * Get or create a hidden product for custom sign cart items.
+     * Build style-specific product details from a submitted configuration.
      *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return array<string,string>
+     */
+    private function get_sign_product_context( $configuration = array() ) {
+        $style_label = '';
+        $style_description = '';
+        $style_id    = '';
+
+        if ( ! empty( $configuration['sign']['style']['label'] ) && is_string( $configuration['sign']['style']['label'] ) ) {
+            $style_label = sanitize_text_field( $configuration['sign']['style']['label'] );
+        }
+        if ( ! empty( $configuration['sign']['style']['description'] ) && is_string( $configuration['sign']['style']['description'] ) ) {
+            $style_description = sanitize_text_field( $configuration['sign']['style']['description'] );
+        }
+
+        if ( ! empty( $configuration['sign']['style']['id'] ) && is_string( $configuration['sign']['style']['id'] ) ) {
+            $style_id = sanitize_key( $configuration['sign']['style']['id'] );
+        }
+
+        if ( '' === $style_label ) {
+            $style_label = __( 'Custom Sign Configuration', 'sign-selector' );
+        }
+
+        $style_key = sanitize_title( $style_label );
+        if ( '' === $style_key ) {
+            $style_key = $style_id ? $style_id : 'default';
+        }
+
+        return array(
+            'style_key'    => $style_key,
+            'style_label'  => $style_label,
+            'product_name' => $style_label,
+            'product_description' => $style_description,
+        );
+    }
+
+    /**
+     * Find an existing hidden placeholder product for a style.
+     *
+     * @param string $style_key Sanitized style key.
      * @return int
      */
-    private function get_or_create_sign_product_id() {
-        $stored_id = (int) get_option( 'sign_selector_product_id', 0 );
+    private function find_existing_sign_product_id( $style_key ) {
+        $posts = get_posts(
+            array(
+                'post_type'      => 'product',
+                'post_status'    => array( 'publish', 'private', 'draft' ),
+                'posts_per_page' => 1,
+                'fields'         => 'ids',
+                'meta_query'     => array(
+                    array(
+                        'key'   => '_sign_selector_product',
+                        'value' => 'yes',
+                    ),
+                    array(
+                        'key'   => '_sign_selector_style_key',
+                        'value' => $style_key,
+                    ),
+                ),
+            )
+        );
+
+        return ! empty( $posts[0] ) ? (int) $posts[0] : 0;
+    }
+
+    /**
+     * Get or create a hidden product for custom sign cart items.
+     * Reuses a single product for each sign style.
+     *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return int
+     */
+    private function get_or_create_sign_product_id( $configuration = array() ) {
+        $context      = $this->get_sign_product_context( $configuration );
+        $style_key    = $context['style_key'];
+        $product_name = $context['product_name'];
+        $product_description = $context['product_description'];
+
+        $product_map = get_option( 'sign_selector_product_ids', array() );
+        if ( ! is_array( $product_map ) ) {
+            $product_map = array();
+        }
+
+        $stored_id = isset( $product_map[ $style_key ] ) ? (int) $product_map[ $style_key ] : 0;
         if ( $stored_id > 0 ) {
             $product = wc_get_product( $stored_id );
-            if ( $product instanceof WC_Product ) {
+            if ( $product instanceof WC_Product && $product->is_purchasable() && 'publish' === $product->get_status() ) {
+                if ( $product->get_name() !== $product_name ) {
+                    $product->set_name( $product_name );
+                    $product->save();
+                }
+
                 return $stored_id;
+            }
+
+            unset( $product_map[ $style_key ] );
+            update_option( 'sign_selector_product_ids', $product_map, false );
+        }
+
+        $existing_id = $this->find_existing_sign_product_id( $style_key );
+        if ( $existing_id > 0 ) {
+            $product = wc_get_product( $existing_id );
+            if ( $product instanceof WC_Product && 'publish' === $product->get_status() ) {
+                if ( $product->get_name() !== $product_name ) {
+                    $product->set_name( $product_name );
+                    $product->save();
+                }
+
+                $product_map[ $style_key ] = $existing_id;
+                update_option( 'sign_selector_product_ids', $product_map, false );
+                update_option( 'sign_selector_product_id', $existing_id, false );
+
+                return $existing_id;
             }
         }
 
         $product = new WC_Product_Simple();
-        $product->set_name( __( 'Custom Sign Configuration', 'sign-selector' ) );
+        $product->set_name( $product_name );
         $product->set_status( 'publish' );
         $product->set_catalog_visibility( 'hidden' );
         $product->set_virtual( true );
         $product->set_regular_price( '1' );
         $product->set_price( '1' );
-        $product->set_description( __( 'Hidden placeholder product used for custom configured signs.', 'sign-selector' ) );
+        $product->set_description( $product_description );
+        $product->update_meta_data( '_sign_selector_product', 'yes' );
+        $product->update_meta_data( '_sign_selector_style_key', $style_key );
+        $product->update_meta_data( '_sign_selector_style_label', $context['style_label'] );
 
         $product_id = $product->save();
         if ( $product_id ) {
+            $product_map[ $style_key ] = (int) $product_id;
+            update_option( 'sign_selector_product_ids', $product_map, false );
             update_option( 'sign_selector_product_id', (int) $product_id, false );
         }
 

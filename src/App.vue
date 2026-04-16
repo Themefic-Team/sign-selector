@@ -4,6 +4,8 @@ import { useSignSelectorState } from './useSignSelectorState'
 
 const {
   stepDefinitions,
+  hasSection,
+  totalSteps,
   state,
   signStyles,
   installationSurfaces,
@@ -36,6 +38,16 @@ const formattedPayload = computed(() => JSON.stringify(payload.value, null, 2))
 
 const formatOptionLabel = (label) => label.replace(/\s*\((\+)?\$\d+\)\s*$/i, '')
 
+const activeTier = ref('Deluxe')
+const tieredTemplates = computed(() => designTemplates.filter(t => t.tier === activeTier.value))
+const hasTiers = computed(() => designTemplates.some(t => t.tier === 'Deluxe') || designTemplates.some(t => t.tier === 'Standard'))
+
+const templateImageUrl = computed(() => {
+  const tpl = selectedTemplate.value
+  if (!tpl) return ''
+  return tpl.images?.[selectedShape.value?.id] || tpl.imageUrl || ''
+})
+
 const getAspectRatio = (shape) => {
   if (!shape?.width || !shape?.height) {
     return '1 / 1'
@@ -51,9 +63,10 @@ const getShapeCardStyle = (shape) => ({
   marginInline: 'auto'
 })
 
-const getSlateChipStyle = (shape, imageUrl, hex) => ({
-  backgroundColor: hex,
+const getSlateChipStyle = (shape, imageUrl) => ({
   backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
   aspectRatio: getAspectRatio(shape),
   width: shape?.id === 'round' ? '62px' : '100%',
   height: 'auto',
@@ -172,7 +185,7 @@ const onSubmit = async () => {
     ctx.clip()
 
     // solid slate base color
-    ctx.fillStyle = selectedSlateColor.value.hex || '#2b3239'
+    ctx.fillStyle = '#2b3239'
     ctx.fillRect(sx - 1, sy - 1, signW + 2, signH + 2)
 
     // Use the base slate texture image for export to avoid artifacts in pre-cut shape assets.
@@ -201,8 +214,8 @@ const onSubmit = async () => {
     // ── 6. Text (clipped inside sign) ────────────────
     const paintHex = selectedPaintColor.value.hex || '#f2f4ef'
     const paintTextureImg = await loadImg(selectedPaintColor.value.imageUrl)
-    const houseText = String(state.houseNumber || selectedTemplate.value.previewText || '183')
-    const streetText = String(state.bottomText || selectedTemplate.value.accentText || '').toUpperCase()
+    const houseText = String(state.houseNumber || '183')
+    const streetText = String(state.bottomText || '').toUpperCase()
 
     const numSize = Math.round(Math.min(signH * 0.38, signW * 0.30))
     const streetSize = Math.round(numSize * 0.28)
@@ -270,26 +283,27 @@ const onSubmit = async () => {
     <div class="tf-selector-shell">
       <ul class="tf-stepper" aria-label="Sign setup steps">
         <li
-          v-for="step in stepDefinitions"
-          :key="step.id"
+          v-for="(sd, idx) in stepDefinitions"
+          :key="sd.id || idx"
           class="tf-step-item"
           :class="{
-            active: state.currentStep === step.id,
-            complete: state.currentStep > step.id
+            active: state.currentStep === idx + 1,
+            complete: state.currentStep > idx + 1
           }"
         >
-          <button type="button" class="tf-step-btn" @click="setStep(step.id)">
+          <button type="button" class="tf-step-btn" @click="setStep(idx + 1)">
             <span class="tf-dot" />
-            <span class="tf-label">{{ step.title }}</span>
+            <span class="tf-label">{{ sd.title }}</span>
           </button>
         </li>
       </ul>
 
       <header class="hero">
-        <h2>{{ stepDefinitions[state.currentStep - 1].heading }}</h2>
-        <p>{{ stepDefinitions[state.currentStep - 1].subheading }}</p>
+        <h2>{{ stepDefinitions[state.currentStep - 1]?.heading || stepDefinitions[state.currentStep - 1]?.title }}</h2>
+        <p>{{ stepDefinitions[state.currentStep - 1]?.subheading || '' }}</p>
       </header>
 
+      <!-- ═══ Step 1: Select Sign Style (always) ═══ -->
       <div v-if="state.currentStep === 1" class="step-grid card-grid-2">
         <button
           v-for="item in signStyles"
@@ -300,7 +314,11 @@ const onSubmit = async () => {
           :class="{ selected: state.signStyleId === item.id }"
           @click="state.signStyleId = item.id"
         >
-          <span class="choice-icon">{{ item.icon }}</span>
+          <span class="choice-icon">
+            <img v-if="item.iconUrl" :src="item.iconUrl" :alt="item.label" class="choice-icon-img" />
+            <span v-else-if="item.icon && item.icon.trim().startsWith('<')" class="choice-icon-svg" v-html="item.icon" />
+            <span v-else>{{ item.icon }}</span>
+          </span>
           <span class="choice-copy">
             <strong>{{ item.label }}</strong>
             <small>{{ item.description }}</small>
@@ -309,33 +327,36 @@ const onSubmit = async () => {
         </button>
       </div>
 
+      <!-- ═══ Step 2: Shape, Size & Slate ═══ -->
       <div v-if="state.currentStep === 2" class="split-layout">
         <div class="panel-stack">
-          <section class="panel installation-panel">
+          <!-- Installation Surface (flow-dependent) -->
+          <section v-if="hasSection('installation-surface')" class="panel installation-panel">
             <h3 class="installation-title">
               Installation Surface
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
             <div class="surface-scroller">
               <div class="pill-grid surface-grid">
-              <button
-                v-for="item in installationSurfaces"
-                :key="item.id"
-                type="button"
-                class="tile surface-tile"
-                :aria-label="item.label"
-                :class="{ selected: state.surfaceId === item.id }"
-                @click="state.surfaceId = item.id"
-              >
-                <span class="surface-thumb" :style="{ backgroundImage: `url(${item.imageUrl})` }" />
-                <span class="sr-only">{{ item.label }}</span>
-                <span v-if="state.surfaceId === item.id" class="surface-check" aria-hidden="true" />
-              </button>
-            </div>
+                <button
+                  v-for="item in installationSurfaces"
+                  :key="item.id"
+                  type="button"
+                  class="tile surface-tile"
+                  :aria-label="item.label"
+                  :class="{ selected: state.surfaceId === item.id }"
+                  @click="state.surfaceId = item.id"
+                >
+                  <span class="surface-thumb" :style="{ backgroundImage: `url(${item.imageUrl})` }" />
+                  <span class="sr-only">{{ item.label }}</span>
+                  <span v-if="state.surfaceId === item.id" class="surface-check" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </section>
 
-          <section class="panel size-panel">
+          <!-- Size & Shape (flow-dependent) -->
+          <section v-if="hasSection('size-shape')" class="panel size-panel">
             <h3 class="panel-title-with-info">
               Size & Shape
               <span class="info-dot" aria-hidden="true">i</span>
@@ -358,7 +379,8 @@ const onSubmit = async () => {
             </div>
           </section>
 
-          <section class="panel slate-panel">
+          <!-- Slate Color (flow-dependent) -->
+          <section v-if="hasSection('slate-color')" class="panel slate-panel">
             <h3 class="panel-title-with-info">
               Slate Color
               <span class="info-dot" aria-hidden="true">i</span>
@@ -377,8 +399,7 @@ const onSubmit = async () => {
                   :class="selectedShape.id"
                   :style="getSlateChipStyle(
                     selectedShape,
-                    item.images?.[selectedShape.id] || item.imageUrl,
-                    item.hex
+                    item.images?.[selectedShape.id] || item.imageUrl
                   )"
                 />
                 <span class="slate-label">{{ item.label }}</span>
@@ -387,14 +408,34 @@ const onSubmit = async () => {
               </button>
             </div>
           </section>
+
+          <div class="footer-actions" v-if="state.currentStep > 1">
+            <button type="button" class="ghost-btn" :disabled="isFirstStep" @click="prevStep">Back</button>
+            <small class="footer-step">Step {{ state.currentStep }} of {{ totalSteps }}</small>
+            <button v-if="!isLastStep" type="button" class="tf-primary-btn" @click="nextStep">Continue</button>
+            <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
+          </div>
         </div>
 
         <aside class="preview-card">
-          <header>Your Custom Sign</header>
+          <header>
+            <div class="apple-cion">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#FF6467"/>
+              </svg>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#FDC700"/>
+              </svg>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#05DF72"/>
+              </svg>
+            </div>
+            <span>Your Custom Sign</span>
+          </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
             <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
-              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
+              <!-- <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
+              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span> -->
             </div>
           </div>
           <ul class="spec-list">
@@ -406,26 +447,68 @@ const onSubmit = async () => {
         </aside>
       </div>
 
+      <!-- ═══ Step 3: Design & Finish ═══ -->
       <div v-if="state.currentStep === 3" class="split-layout">
         <div class="panel-stack">
-          <section class="panel">
-            <h3>Design Template</h3>
-            <div class="pill-grid">
+          <!-- Design Template (flow-dependent) -->
+          <section v-if="hasSection('design-template')" class="panel">
+            <div class="design-template-header">
+              <h3 class="panel-title-with-info">
+              Select Design Template
+                <span class="info-dot" aria-hidden="true">i</span>
+              </h3>
+
+              <!-- Tier tabs -->
+              <div v-if="hasTiers" class="tier-tabs">
+                <button
+                  type="button"
+                  class="tier-tab"
+                  :class="{ active: activeTier === 'Deluxe' }"
+                  @click="activeTier = 'Deluxe'"
+                >Deluxe</button>
+                <button
+                  type="button"
+                  class="tier-tab"
+                  :class="{ active: activeTier === 'Standard' }"
+                  @click="activeTier = 'Standard'"
+                >Standard</button>
+              </div>
+            </div>
+
+            <!-- Filtered templates by active tier -->
+            <div v-if="hasTiers" class="pill-grid template-grid">
+              <button
+                v-for="item in tieredTemplates"
+                :key="item.id"
+                type="button"
+                class="tile template-tile"
+                :class="{ selected: state.templateId === item.id }"
+                @click="state.templateId = item.id"
+              >
+                <img v-if="item.images?.[selectedShape.id] || item.imageUrl" :src="item.images?.[selectedShape.id] || item.imageUrl" :alt="item.label" class="template-thumb" />
+                 
+                <span v-if="state.templateId === item.id" class="option-check" aria-hidden="true" />
+              </button>
+            </div>
+
+            <!-- Fallback: templates without tier grouping -->
+            <div v-if="!hasTiers" class="pill-grid template-grid">
               <button
                 v-for="item in designTemplates"
                 :key="item.id"
                 type="button"
-                class="tile"
+                class="tile template-tile"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
+                <img v-if="item.images?.[selectedShape.id] || item.imageUrl" :src="item.images?.[selectedShape.id] || item.imageUrl" :alt="item.label" class="template-thumb" />
                 <span>{{ item.label }}</span>
-                <small>{{ item.tier }}</small>
               </button>
             </div>
           </section>
 
-          <section class="panel paint-panel">
+          <!-- Paint Color (flow-dependent) -->
+          <section v-if="hasSection('paint-color')" class="panel paint-panel">
             <h3 class="panel-title-with-info">
               Paint Color
               <span class="info-dot" aria-hidden="true">i</span>
@@ -451,81 +534,139 @@ const onSubmit = async () => {
               </button>
             </div>
           </section>
+
+          <div class="footer-actions" v-if="state.currentStep > 1">
+            <button type="button" class="ghost-btn" :disabled="isFirstStep" @click="prevStep">Back</button>
+            <small class="footer-step">Step {{ state.currentStep }} of {{ totalSteps }}</small>
+            <button v-if="!isLastStep" type="button" class="tf-primary-btn" @click="nextStep">Continue</button>
+            <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
+          </div>
         </div>
 
         <aside class="preview-card">
-          <header>Your Custom Sign</header>
+          <header>
+            <div class="apple-cion">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#FF6467"/>
+              </svg>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#FDC700"/>
+              </svg>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6" cy="6" r="6" fill="#05DF72"/>
+              </svg>
+            </div>
+            <span>Your Custom Sign</span>
+          </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
             <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
-              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || selectedTemplate.accentText }}</span>
+              <div
+                v-if="templateImageUrl"
+                class="preview-template-overlay"
+                :style="{
+                  backgroundColor: selectedPaintColor.hex,
+                  backgroundImage: selectedPaintColor.imageUrl ? `url(${selectedPaintColor.imageUrl})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  WebkitMaskImage: `url(${templateImageUrl})`,
+                  maskImage: `url(${templateImageUrl})`
+                }"
+              />
+              <!-- <template v-else>
+                <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
+                <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
+              </template> -->
             </div>
           </div>
           <ul class="spec-list">
             <li><span>Type</span><strong>{{ selectedSignStyle.label }}</strong></li>
             <li><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
             <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
-            <li><span>Template</span><strong>{{ selectedTemplate.label }}</strong></li>
+            <li><span>Template</span><strong>{{ selectedTemplate?.label }}</strong></li>
             <li><span>Paint</span><strong>{{ selectedPaintColor.label }}</strong></li>
-            <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
             <li><span>Total</span><strong>${{ totalPrice.toFixed(2) }}</strong></li>
           </ul>
         </aside>
       </div>
 
+      <!-- ═══ Step 4: Review & Add to Cart ═══ -->
       <div v-if="state.currentStep === 4" class="split-layout">
-        <section class="panel review-panel">
-          <label class="field-label">House Number</label>
-          <input v-model="state.houseNumber" type="text" class="field-input" />
+        <div class="panel-stack">
+          <section class="panel review-panel">
+            <label class="field-label">House Number</label>
+            <input v-model="state.houseNumber" type="text" class="field-input" />
 
-          <label class="field-label">Bottom Text</label>
-          <input v-model="state.bottomText" type="text" class="field-input" placeholder="Street name or custom text" />
+            <label class="field-label">Bottom Text</label>
+            <input v-model="state.bottomText" type="text" class="field-input" placeholder="Street name or custom text" />
 
-          <label class="field-label">Sign Style</label>
-          <select v-model="state.signStyleId" class="field-input">
-            <option v-for="item in signStyles" :key="item.id" :value="item.id">{{ item.label }}</option>
-          </select>
+            <label class="field-label">Sign Style</label>
+            <select v-model="state.signStyleId" class="field-input">
+              <option v-for="item in signStyles" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
 
-          <label class="field-label">Paint Color</label>
-          <select v-model="state.paintColorId" class="field-input">
-            <option v-for="item in paintColors" :key="item.id" :value="item.id">{{ item.label }}</option>
-          </select>
+            <label class="field-label">Paint Color</label>
+            <select v-model="state.paintColorId" class="field-input">
+              <option v-for="item in paintColors" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
 
-          <label class="field-label">Add-ons</label>
-          <select v-model="state.addOnId" class="field-input">
-            <option v-for="item in addOns" :key="item.id" :value="item.id">{{ item.label }}</option>
-          </select>
+            <label class="field-label">Add-ons</label>
+            <select v-model="state.addOnId" class="field-input">
+              <option v-for="item in addOns" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
 
-          <label class="field-label">Mounting Hardware</label>
-          <select v-model="state.hardwareId" class="field-input">
-            <option v-for="item in mountingHardware" :key="item.id" :value="item.id">{{ item.label }}</option>
-          </select>
-        </section>
+            <label class="field-label">Mounting Hardware</label>
+            <select v-model="state.hardwareId" class="field-input">
+              <option v-for="item in mountingHardware" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
 
+          </section>
+          
+          <div class="footer-actions" v-if="state.currentStep > 1">
+            <button type="button" class="ghost-btn" :disabled="isFirstStep" @click="prevStep">Back</button>
+            <small class="footer-step">Step {{ state.currentStep }} of {{ totalSteps }}</small>
+            <button v-if="!isLastStep" type="button" class="tf-primary-btn" @click="nextStep">Continue</button>
+            <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
+          </div>
+        </div>
         <aside class="preview-card summary-card">
-          <header>Order Summery</header>
+          <header class="order-summary-header">Order Summary</header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
             <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || selectedTemplate.previewText }}</span>
-              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || selectedTemplate.accentText }}</span>
+              <div
+                v-if="templateImageUrl"
+                class="preview-template-overlay"
+                :style="{
+                  backgroundColor: selectedPaintColor.hex,
+                  backgroundImage: selectedPaintColor.imageUrl ? `url(${selectedPaintColor.imageUrl})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  WebkitMaskImage: `url(${templateImageUrl})`,
+                  maskImage: `url(${templateImageUrl})`
+                }"
+              />
+              <template v-else>
+                <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
+                <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
+              </template>
             </div>
-          </div>
+          </div> 
           <ul class="summary-list">
-            <li class="summary-item"><span>Shape &amp; Size: {{ selectedShape.label }}</span><strong>${{ selectedShape.basePrice.toFixed(2) }}</strong></li>
-            <li class="summary-item"><span>Slate Color: {{ selectedSlateColor.label }}</span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
-            <li class="summary-item"><span>Template: {{ selectedTemplate.label }}</span><strong>${{ selectedTemplate.price.toFixed(2) }}</strong></li>
-            <li class="summary-item"><span>Paint Color: {{ selectedPaintColor.label }}</span><strong>${{ selectedPaintColor.price.toFixed(2) }}</strong></li>
-            <li class="summary-item-main"><span>{{ formatOptionLabel(selectedAddOn.label) }}</span><strong>+${{ payload.pricing.addOn.toFixed(2) }}</strong></li>
-            <li class="summary-item-main"><span>{{ formatOptionLabel(selectedHardware.label) }}</span><strong>+${{ payload.pricing.hardware.toFixed(2) }}</strong></li>
-          </ul>
+            <li class="summary-item"><span>Shape &amp; Size: <strong>{{ selectedShape.label }}</strong></span><strong>${{ selectedShape.basePrice.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Slate Color: <strong>{{ selectedSlateColor.label }}</strong></span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Template: <strong>{{ selectedTemplate?.label }}</strong></span><strong>${{ (selectedTemplate?.price || 0).toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Paint Color: <strong>{{ selectedPaintColor.label }}</strong></span><strong>${{ selectedPaintColor.price.toFixed(2) }}</strong></li>
+            <li class="divider"></li>
+            <li class="summary-item-main"><span><strong>{{ formatOptionLabel(selectedAddOn.label) }}</strong></span><strong>+${{ payload.pricing.addOn.toFixed(2) }}</strong></li>
+            <li class="summary-item-main"><span><strong>{{ formatOptionLabel(selectedHardware.label) }}</strong></span><strong>+${{ payload.pricing.hardware.toFixed(2) }}</strong></li>
+          </ul> 
           <p class="final-total"><span>Total:</span><strong>${{ totalPrice.toFixed(2) }}</strong></p>
           <p class="summary-note">(before shipping &amp; taxes)</p>
         </aside>
       </div>
 
-      <div class="footer-actions">
+      <div class="footer-actions" v-if="state.currentStep == 1">
         <button type="button" class="ghost-btn" :disabled="isFirstStep" @click="prevStep">Back</button>
-        <small class="footer-step">Step {{ state.currentStep }} of 4</small>
+        <small class="footer-step">Step {{ state.currentStep }} of {{ totalSteps }}</small>
         <button v-if="!isLastStep" type="button" class="tf-primary-btn" @click="nextStep">Continue</button>
         <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
       </div>
@@ -726,7 +867,7 @@ const onSubmit = async () => {
   display: flex;
   align-items: center;
   gap: 16px;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .choice-card.selected {
@@ -734,6 +875,17 @@ const onSubmit = async () => {
   border: 2px solid var(--Primary-Default, #675D9A);
   background: #E8E5F6;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.10), 0 4px 6px -4px rgba(0, 0, 0, 0.10); 
+}
+
+.choice-card:not(.selected):hover {
+  border-color: #b0adc4;
+  background: #f5f4fa;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.choice-card:not(.selected):hover .choice-icon {
+  background: #c5c2d8;
 }
 
 .choice-icon {
@@ -747,11 +899,41 @@ const onSubmit = async () => {
   color: #3a3946;
   font-size: 28px;
   flex-shrink: 0;
+  overflow: hidden;
+  transition: background 0.2s;
+}
+
+.choice-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.choice-icon-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.choice-icon-svg :deep(svg) {
+  width: 32px;
+  height: 32px;
 }
 
 .choice-card.selected .choice-icon { 
   color: #fff;
   background: var(--Text-Title, #302F37);
+}
+
+.choice-card.selected .choice-icon-img {
+  filter: brightness(0) invert(1);
+}
+
+.choice-card.selected .choice-icon-svg :deep(svg) {
+  fill: #fff;
+  color: #fff;
 }
 
 .choice-copy {
@@ -818,6 +1000,13 @@ const onSubmit = async () => {
   box-shadow: var(--shadow);
   border: 1px solid #e0dee8;
 }
+ 
+.divider {
+	height: 1px;
+	width: 100%;
+	background: var(--Border-Faint, #EEEEE7);
+	margin: 8px 0;
+}
 
 .preview-card {
   position: sticky;
@@ -825,10 +1014,25 @@ const onSubmit = async () => {
 }
 
 .panel h3,
-.preview-card header {
-  margin: 0 0 12px;
-  font-size: 18px;
+.preview-card header span {
+  color: var(--Text-Title, #302F37);
+ 
+  font-size: 19px; 
+  font-weight: 600;
+  line-height: 140%; /* 26.6px */
 }
+.preview-card header{
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.preview-card header .apple-cion {
+  display: flex;
+  align-items: center;
+  gap: 8px; 
+}
+
 
 .pill-grid {
   display: grid;
@@ -836,10 +1040,18 @@ const onSubmit = async () => {
   gap: 10px;
 }
 
-.panel-title-with-info {
-  display: inline-flex;
+.design-template-header {
+  display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+}
+.panel-title-with-info {
+  color: var(--Text-Title, #302F37);
+
+  /* Body/Small/Semibold */ 
+  font-size: 16px; 
+  font-weight: 600;
+  line-height: 160%; /* 25.6px */
 }
 
 .installation-panel {
@@ -847,10 +1059,11 @@ const onSubmit = async () => {
 }
 
 .installation-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+ color: var(--Text-Title, #302F37);
+ 
+  font-size: 16px; 
+  font-weight: 600;
+  line-height: 160%; /* 25.6px */
 }
 
 .info-dot {
@@ -899,9 +1112,9 @@ const onSubmit = async () => {
 }
 
 .tile {
-  border: 1px solid #d8d6df;
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--Border-Default, #D4D4C4);
+  padding: 8px;
   background: #fff;
   text-align: left;
   cursor: pointer;
@@ -912,10 +1125,10 @@ const onSubmit = async () => {
 
 .surface-tile {
   position: relative;
-  padding: 10px;
+  padding: 8px;
   min-height: 0;
-  border: 1.5px solid #c8c6b7;
-  border-radius: 14px;
+  border: 1px solid var(--Border-Default, #D4D4C4);
+  border-radius: 8px;
   background: #fdfcf8;
 }
 
@@ -931,6 +1144,7 @@ const onSubmit = async () => {
   padding: 8px;
   align-items: center;
   gap: 7px;
+  justify-content: space-between;
 }
 
 .shape-preview {
@@ -974,7 +1188,7 @@ const onSubmit = async () => {
 .surface-thumb {
   width: 100%;
   aspect-ratio: 16 / 10;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   background-size: cover;
   background-position: center;
@@ -983,10 +1197,10 @@ const onSubmit = async () => {
 
 .surface-check {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--accent);
 }
@@ -995,9 +1209,9 @@ const onSubmit = async () => {
   content: '';
   position: absolute;
   top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 10px;
+  left: 52%;
+  width: 4px;
+  height: 8px;
   border-right: 2px solid #fff;
   border-bottom: 2px solid #fff;
   transform: translate(-50%, -62%) rotate(45deg);
@@ -1039,9 +1253,9 @@ const onSubmit = async () => {
 
 .tile.selected,
 .swatch.selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: #edeaf8;
+  border-color:var(--Primary-Default, #675D9A);
+  box-shadow: inset 0 0 0 1px var(--Primary-Default, #675D9A); 
+  background: #E8E5F6;
 }
 
 .shape-card.selected,
@@ -1105,7 +1319,7 @@ const onSubmit = async () => {
 }
 
 .slate-chip.arch {
-  border-radius: 18px 18px 6px 6px;
+  border-radius: 50%;
 }
 
 .slate-chip.round {
@@ -1121,9 +1335,11 @@ const onSubmit = async () => {
 }
 
 .slate-price {
-  font-size: 28px;
-  line-height: 1.2;
-  color: #575666;
+  color: var(--Text-Paragraph, #4D4B58);
+ 
+  font-size: 13px; 
+  font-weight: 400;
+  line-height: 150%; /* 19.5px */
 }
 
 /* ── Paint Color grid ──────────────────────────────── */
@@ -1183,6 +1399,68 @@ const onSubmit = async () => {
   left: 6px;
 }
 
+/* ── Tier tabs & template images ────────────────────── */
+.tier-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+  padding: 4px;
+}
+
+.tier-tab {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.tier-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tier-tab:not(.active):hover {
+  background: var(--accent-soft);
+}
+
+.template-grid {
+  gap: 10px;
+}
+
+.template-tile {
+  position: relative;
+}
+
+.template-thumb {
+  width: 100%;
+  max-height: 80px;
+  border-radius: 6px;
+  object-fit: contain; 
+}
+
+/* Template overlay on sign preview – uses CSS mask to apply paint color */
+.preview-template-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
 .preview-canvas {
   border-radius: 10px;
   min-height: 280px;
@@ -1193,6 +1471,7 @@ const onSubmit = async () => {
 }
 
 .preview-sign {
+  position: relative;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1260,10 +1539,12 @@ const onSubmit = async () => {
 }
 
 .field-label {
-  font-size: 22px;
-  font-weight: 500;
-  color: #2f3040;
-  margin-top: 4px;
+  color: var(--Text-Title, #302F37);
+ 
+  font-size: 16px; 
+  font-weight: 600;
+  line-height: 160%; /* 25.6px */
+  margin-top: 8px;
 }
 
 .field-input {
@@ -1281,10 +1562,11 @@ const onSubmit = async () => {
 }
 
 .summary-card header {
-  margin-bottom: 14px;
-  font-size: 32px;
-  font-weight: 500;
-  color: #2f3040;
+  color: var(--Text-Title, #302F37);
+  margin-bottom: 20px;
+  font-size: 19px; 
+  font-weight: 600;
+  line-height: 140%; /* 26.6px */
 }
 
 .summary-list {
@@ -1300,12 +1582,25 @@ const onSubmit = async () => {
 .final-total {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
+  gap: 12px; 
+  color: var(--Text-Faint, #605E6E);
+ 
+  font-size: 16px; 
+  font-weight: 400;
+  line-height: 160%; /* 25.6px */
 }
 
 .summary-item span {
   color: #5f5d6d;
+  
+}
+.summary-item-main span strong,
+.summary-item span strong {
+  color: var(--Text-Title, #302F37);
+ 
+  font-size: 16px; 
+  font-weight: 600;
+  line-height: 160%; /* 25.6px */
 }
 
 .summary-item strong,
@@ -1314,17 +1609,19 @@ const onSubmit = async () => {
   font-weight: 500;
 }
 
-.summary-item-main {
-  margin-top: 10px;
+.summary-item-main { 
   color: #2f3040;
 }
 
 .final-total {
   border-top: 1px solid #dad8e1;
   margin-top: 16px;
-  padding-top: 14px;
-  font-size: 28px;
+  padding-top: 14px; 
   color: #2f3040;
+  color: var(--Text-Title, #302F37); 
+  font-size: 19px; 
+  font-weight: 400;
+  line-height: 140%; /* 26.6px */
 }
 
 .summary-note {
