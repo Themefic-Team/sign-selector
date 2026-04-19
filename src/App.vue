@@ -921,8 +921,8 @@ const onSubmit = async () => {
   filter: brightness(0) invert(1);
 }
 
-.choice-card.selected .choice-icon-svg :deep(svg) {
-  fill: #fff;
+.choice-card.selected .choice-icon-svg :deep(svg path) {
+  stroke: #fff;
   color: #fff;
 }
 
