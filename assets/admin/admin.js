@@ -114,6 +114,8 @@
   const StepsTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/steps');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingStep, setIsAddingStep] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -122,7 +124,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: items.length + 1, title: '', heading: '', subheading: '', enabled: true }]);
+      const nextItems = [...items, { id: items.length + 1, title: '', heading: '', subheading: '', enabled: true }];
+      setItems(nextItems);
+      setIsAddingStep(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingStep(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingStep(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -137,9 +152,7 @@
           el('tr', null,
             el('th', null, '#'),
             el('th', null, __('Title', 'sign-selector')),
-            el('th', null, __('Heading', 'sign-selector')),
-            el('th', null, __('Subheading', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
@@ -147,11 +160,21 @@
           items.map((item, i) =>
             el('tr', { key: i },
               el('td', null, item.id),
-              el('td', null, el('input', { className: 'ss-input', value: item.title || '', onChange: (e) => updateField(i, 'title', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.heading || '', onChange: (e) => updateField(i, 'heading', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.subheading || '', onChange: (e) => updateField(i, 'subheading', e.target.value) })),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.title || __('Untitled Step', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.heading || __('No heading', 'sign-selector'))
+                )
+              ),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -160,6 +183,26 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Steps', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingStep ? __('Add Step', 'sign-selector') : __('Edit Step', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            el('label', { className: 'ss-template-field-label' }, __('Title', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].title || '', onChange: (e) => updateField(editingIndex, 'title', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Heading', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].heading || '', onChange: (e) => updateField(editingIndex, 'heading', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Subheading', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].subheading || '', onChange: (e) => updateField(editingIndex, 'subheading', e.target.value) }),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -273,7 +316,8 @@
   const SignStylesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/sign-styles');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
-    const [expandedFlow, setExpandedFlow] = useState(null);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingStyle, setIsAddingStyle] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -282,7 +326,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', description: '', icon: '', iconUrl: '', enabled: true, flow: [...defaultFlow] }]);
+      const nextItems = [...items, { id: uid(), label: '', description: '', icon: '', iconUrl: '', enabled: true, flow: [...defaultFlow] }];
+      setItems(nextItems);
+      setIsAddingStyle(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingStyle(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingStyle(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -296,51 +353,36 @@
         el('thead', null,
           el('tr', null,
             el('th', null, __('Preview', 'sign-selector')),
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Style', 'sign-selector')),
             el('th', null, __('Description', 'sign-selector')),
-            el('th', null, __('Icon (Image URL or SVG)', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
-            el(Fragment, { key: i },
-              el('tr', null,
-                el('td', null,
-                  item.iconUrl
-                    ? el('img', { className: 'ss-img-preview', src: item.iconUrl, alt: item.label, style: { width: '48px', height: '48px', objectFit: 'contain' } })
-                    : item.icon && item.icon.trim().startsWith('<')
-                      ? el('span', { className: 'ss-svg-preview', dangerouslySetInnerHTML: { __html: item.icon }, style: { display: 'inline-block', width: '48px', height: '48px' } })
-                      : el('span', { style: { fontSize: '28px' } }, item.icon || '—')
-                ),
-                el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-                el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-                el('td', null, el('input', { className: 'ss-input', value: item.description || '', onChange: (e) => updateField(i, 'description', e.target.value) })),
-                el('td', null,
-                  el('div', { className: 'ss-img-cell' },
-                    el('input', { className: 'ss-input', value: item.iconUrl || '', onChange: (e) => updateField(i, 'iconUrl', e.target.value), placeholder: __('Image URL (or paste SVG below)', 'sign-selector') }),
-                    el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'iconUrl', url)) }, __('Browse', 'sign-selector')),
-                    el('textarea', { className: 'ss-input ss-svg-textarea', rows: 2, value: item.icon || '', onChange: (e) => updateField(i, 'icon', e.target.value), placeholder: __('Inline SVG code (optional)', 'sign-selector') })
-                  )
-                ),
-                el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-                el('td', null, el('div', { className: 'ss-actions' },
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => setExpandedFlow(expandedFlow === i ? null : i) }, expandedFlow === i ? __('Hide Flow', 'sign-selector') : __('Edit Flow', 'sign-selector')),
-                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
-                ))
+            el('tr', { key: i },
+              el('td', null,
+                item.iconUrl
+                  ? el('img', { className: 'ss-img-preview', src: item.iconUrl, alt: item.label, style: { width: '48px', height: '48px', objectFit: 'contain' } })
+                  : item.icon && item.icon.trim().startsWith('<')
+                    ? el('span', { className: 'ss-svg-preview', dangerouslySetInnerHTML: { __html: item.icon }, style: { display: 'inline-block', width: '48px', height: '48px' } })
+                    : el('span', { style: { fontSize: '28px' } }, item.icon || '—')
               ),
-              expandedFlow === i && el('tr', null,
-                el('td', { colSpan: 7 },
-                  el('div', { className: 'ss-flow-section' },
-                    el('h4', null, __('Configurator flow for: ', 'sign-selector') + (item.label || item.id)),
-                    el('p', { className: 'ss-flow-hint' }, __('Check/uncheck sections and use arrows to reorder. Step 1 (Sign Style selection) is always shown first.', 'sign-selector')),
-                    el(FlowEditor, {
-                      flow: item.flow || defaultFlow,
-                      onChange: (newFlow) => updateField(i, 'flow', newFlow)
-                    })
-                  )
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Style', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
+                )
+              ),
+              el('td', null, item.description || '—'),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
                 )
               )
             )
@@ -351,6 +393,44 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Sign Styles', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingStyle ? __('Add Style', 'sign-selector') : __('Edit Style', 'sign-selector')),
+          el('div', { className: 'ss-template-form-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Basic Details', 'sign-selector')),
+              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Description', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].description || '', onChange: (e) => updateField(editingIndex, 'description', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
+              el('div', { className: 'ss-img-cell' },
+                el('input', { className: 'ss-input', value: items[editingIndex].iconUrl || '', onChange: (e) => updateField(editingIndex, 'iconUrl', e.target.value) }),
+                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'iconUrl', url)) }, __('Browse', 'sign-selector'))
+              ),
+              el('label', { className: 'ss-template-field-label' }, __('Inline SVG (optional)', 'sign-selector')),
+              el('textarea', { className: 'ss-input ss-svg-textarea', rows: 4, value: items[editingIndex].icon || '', onChange: (e) => updateField(editingIndex, 'icon', e.target.value) }),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              )
+            ),
+            el('div', { className: 'ss-template-options-section', style: { gridColumn: 'span 2' } },
+              el('h4', null, __('Configurator Flow', 'sign-selector')),
+              el('p', { className: 'ss-flow-hint' }, __('Check/uncheck sections and drag to reorder. Review always stays last.', 'sign-selector')),
+              el(FlowEditor, {
+                flow: items[editingIndex].flow || defaultFlow,
+                onChange: (newFlow) => updateField(editingIndex, 'flow', newFlow)
+              })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -364,6 +444,8 @@
   const SurfacesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/surfaces');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingSurface, setIsAddingSurface] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -372,7 +454,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', image: '', imageUrl: '', enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', image: '', imageUrl: '', enabled: true }];
+      setItems(nextItems);
+      setIsAddingSurface(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingSurface(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingSurface(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -386,10 +481,8 @@
         el('thead', null,
           el('tr', null,
             el('th', null, __('Preview', 'sign-selector')),
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
-            el('th', null, __('Image URL', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Surface', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
@@ -399,16 +492,23 @@
               el('td', null,
                 item.imageUrl
                   ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label })
-                  : el('span', { className: 'ss-img-preview', style: { display: 'inline-block', background: '#eee' } })
+                  : el('span', { className: 'ss-img-preview ss-img-preview-empty', style: { display: 'inline-block' } })
               ),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null, el('div', { className: 'ss-img-cell' },
-                el('input', { className: 'ss-input', value: item.imageUrl || '', onChange: (e) => updateField(i, 'imageUrl', e.target.value) }),
-                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-              )),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Surface', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
+                )
+              ),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -417,6 +517,29 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Surfaces', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingSurface ? __('Add Surface', 'sign-selector') : __('Edit Surface', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
+            el('div', { className: 'ss-img-cell' },
+              el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
+              el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -430,6 +553,8 @@
   const ShapesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/shapes');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingShape, setIsAddingShape] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -439,7 +564,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', width: 10, height: 5, basePrice: 0, enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', width: 10, height: 5, basePrice: 0, enabled: true }];
+      setItems(nextItems);
+      setIsAddingShape(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingShape(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingShape(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -452,25 +590,33 @@
       el('table', { className: 'ss-table' },
         el('thead', null,
           el('tr', null,
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
-            el('th', null, __('Width', 'sign-selector')),
-            el('th', null, __('Height', 'sign-selector')),
-            el('th', null, __('Base Price ($)', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Shape', 'sign-selector')),
+            el('th', null, __('Dimensions', 'sign-selector')),
+            el('th', null, __('Base Price', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
             el('tr', { key: i },
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', value: item.width ?? 0, onChange: (e) => updateField(i, 'width', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', value: item.height ?? 0, onChange: (e) => updateField(i, 'height', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.basePrice ?? 0, onChange: (e) => updateField(i, 'basePrice', e.target.value) })),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Shape', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
+                )
+              ),
+              el('td', null, `${item.width ?? 0}" × ${item.height ?? 0}"`),
+              el('td', null, `$${Number(item.basePrice ?? 0).toFixed(2)}`),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -479,6 +625,30 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Shapes', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingShape ? __('Add Shape', 'sign-selector') : __('Edit Shape', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Width', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].width ?? 0, onChange: (e) => updateField(editingIndex, 'width', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Height', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].height ?? 0, onChange: (e) => updateField(editingIndex, 'height', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Base Price ($)', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].basePrice ?? 0, onChange: (e) => updateField(editingIndex, 'basePrice', e.target.value) }),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -491,10 +661,10 @@
 
   const SlateColorsTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/slate-colors');
-    const [expandedRow, setExpandedRow] = useState(null);
     const [shapeIds, setShapeIds] = useState(['default']);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingColor, setIsAddingColor] = useState(false);
 
-    // Fetch shapes dynamically so newly added shapes appear as image override slots
     useEffect(() => {
       apiFetch({ path: '/sign-selector/v1/shapes' }).then((data) => {
         const ids = (Array.isArray(data) ? data : []).map((s) => s.id).filter(Boolean);
@@ -518,7 +688,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', price: 0, imageUrl: '', images: {}, enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', price: 0, imageUrl: '', images: {}, enabled: true }];
+      setItems(nextItems);
+      setIsAddingColor(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingColor(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingColor(false);
     };
 
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
@@ -532,61 +715,33 @@
         el('thead', null,
           el('tr', null,
             el('th', null, __('Preview', 'sign-selector')),
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Slate Color', 'sign-selector')),
             el('th', null, __('Price ($)', 'sign-selector')),
-            el('th', null, __('Default Image', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
-            el(Fragment, { key: i },
-              el('tr', null,
-                el('td', null, item.imageUrl
-                  ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label })
-                  : el('div', { className: 'ss-color-preview', style: { backgroundColor: '#ccc' } })
-                ),
-                el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-                el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-                el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.price ?? 0, onChange: (e) => updateField(i, 'price', e.target.value) })),
-                el('td', null, el('div', { className: 'ss-img-cell' },
-                  el('input', { className: 'ss-input', value: item.imageUrl || '', onChange: (e) => updateField(i, 'imageUrl', e.target.value), placeholder: __('Default image URL', 'sign-selector') }),
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-                )),
-                el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-                el('td', null, el('div', { className: 'ss-actions' },
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => setExpandedRow(expandedRow === i ? null : i) }, expandedRow === i ? __('Hide Shapes', 'sign-selector') : __('Shape Images', 'sign-selector')),
-                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
-                ))
+            el('tr', { key: i },
+              el('td', null, item.imageUrl
+                ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label })
+                : el('div', { className: 'ss-color-preview' })
               ),
-              expandedRow === i && el('tr', null,
-                el('td', { colSpan: 7 },
-                  el('div', { className: 'ss-shape-images-section' },
-                    el('h4', null, __('Shape-specific image overrides for: ', 'sign-selector') + item.label),
-                    el('div', { className: 'ss-shape-images-grid' },
-                      shapeIds.map(shapeId =>
-                        el('div', { className: 'ss-shape-img-item', key: shapeId },
-                          el('label', null, shapeId),
-                          item.images && item.images[shapeId]
-                            ? el('img', { className: 'ss-img-preview', src: item.images[shapeId], alt: shapeId })
-                            : null,
-                          el('div', { className: 'ss-img-cell' },
-                            el('input', {
-                              className: 'ss-input',
-                              value: (item.images && item.images[shapeId]) || '',
-                              onChange: (e) => updateShapeImage(i, shapeId, e.target.value),
-                              placeholder: __('Image URL', 'sign-selector')
-                            }),
-                            el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(i, shapeId, url)) }, __('Browse', 'sign-selector'))
-                          )
-                        )
-                      )
-                    )
-                  )
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Slate Color', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
-              )
+              ),
+              el('td', null, Number(item.price ?? 0).toFixed(2)),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null, el('div', { className: 'ss-actions' },
+                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+              ))
             )
           )
         )
@@ -595,6 +750,57 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Slate Colors', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingColor ? __('Add Slate Color', 'sign-selector') : __('Edit Slate Color', 'sign-selector')),
+          el('div', { className: 'ss-template-form-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Basic Details', 'sign-selector')),
+              items[editingIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingIndex].imageUrl, alt: items[editingIndex].label || 'Slate preview' }) : null,
+              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
+              el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Default Image URL', 'sign-selector')),
+              el('div', { className: 'ss-img-cell' },
+                el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
+                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+              ),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              )
+            ),
+            el('div', { className: 'ss-template-options-section', style: { gridColumn: 'span 2' } },
+              el('h4', null, __('Shape-specific Images', 'sign-selector')),
+              el('div', { className: 'ss-shape-images-grid' },
+                shapeIds.map(shapeId =>
+                  el('div', { className: 'ss-shape-img-item', key: shapeId },
+                    el('label', { className: 'ss-template-field-label' }, shapeId),
+                    items[editingIndex].images && items[editingIndex].images[shapeId]
+                      ? el('img', { className: 'ss-img-preview', src: items[editingIndex].images[shapeId], alt: shapeId })
+                      : null,
+                    el('div', { className: 'ss-img-cell' },
+                      el('input', {
+                        className: 'ss-input',
+                        value: (items[editingIndex].images && items[editingIndex].images[shapeId]) || '',
+                        onChange: (e) => updateShapeImage(editingIndex, shapeId, e.target.value),
+                        placeholder: __('Image URL', 'sign-selector')
+                      }),
+                      el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(editingIndex, shapeId, url)) }, __('Browse', 'sign-selector'))
+                    )
+                  )
+                )
+              )
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -611,6 +817,9 @@
     const [shapeOptions, setShapeOptions] = useState([{ id: 'all', label: __('All Shapes', 'sign-selector') }]);
     const [signStyleOptions, setSignStyleOptions] = useState([]);
     const [editingTemplateIndex, setEditingTemplateIndex] = useState(null);
+    const [isAddingTemplate, setIsAddingTemplate] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 8;
 
     const templateFieldOptions = [
       { id: 'topText', label: __('Top Text', 'sign-selector') },
@@ -715,8 +924,15 @@
       setItems(next);
     };
 
-    const openTemplateOptions = (index) => setEditingTemplateIndex(index);
-    const closeTemplateOptions = () => setEditingTemplateIndex(null);
+    const openTemplateOptions = (index) => {
+      setIsAddingTemplate(false);
+      setEditingTemplateIndex(index);
+    };
+
+    const closeTemplateOptions = () => {
+      setEditingTemplateIndex(null);
+      setIsAddingTemplate(false);
+    };
 
     const getStyleSummary = (item) => {
       const assignedIds = getAssignedSignStyleIds(item);
@@ -748,8 +964,22 @@
         .join(', ');
     };
 
+    const getShapeSummary = (item) => {
+      return shapeOptions.find((shape) => shape.id === (item.shapeId || 'all'))?.label || item.shapeId || __('All Shapes', 'sign-selector');
+    };
+
+    const orderedTemplateEntries = items.map((item, index) => ({ item, index })).reverse();
+    const totalPages = Math.max(1, Math.ceil(orderedTemplateEntries.length / pageSize));
+    const paginatedTemplateEntries = orderedTemplateEntries.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    useEffect(() => {
+      if (currentPage > totalPages) {
+        setCurrentPage(totalPages);
+      }
+    }, [currentPage, totalPages]);
+
     const addItem = () => {
-      setItems([...items, {
+      const nextItems = [...items, {
         id: uid(),
         label: '',
         tier: 'Standard',
@@ -759,7 +989,12 @@
         textLayout: 'number',
         imageUrl: '',
         enabled: true
-      }]);
+      }];
+
+      setItems(nextItems);
+      setCurrentPage(1);
+      setIsAddingTemplate(true);
+      setEditingTemplateIndex(nextItems.length - 1);
     };
 
     const saveTemplates = () => {
@@ -793,37 +1028,30 @@
         el('thead', null,
           el('tr', null,
             el('th', null, __('Image', 'sign-selector')),
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Template', 'sign-selector')),
             el('th', null, __('Tier', 'sign-selector')),
             el('th', null, __('Shape', 'sign-selector')),
             el('th', null, __('Template Options', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
-          items.map((item, i) =>
-            el('tr', { key: i },
+          paginatedTemplateEntries.map(({ item, index }) =>
+            el('tr', { key: item.id || index },
               el('td', null,
-                el('div', { className: 'ss-img-cell' },
-                  item.imageUrl ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label }) : null,
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-                )
-              ),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null,
-                el('select', { className: 'ss-input ss-input-sm', value: item.tier || 'Standard', onChange: (e) => updateField(i, 'tier', e.target.value) },
-                  el('option', { value: 'Deluxe' }, 'Deluxe'),
-                  el('option', { value: 'Standard' }, 'Standard')
-                )
+                item.imageUrl
+                  ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label || item.id || 'Template preview' })
+                  : el('div', { className: 'ss-img-preview ss-img-preview-empty' })
               ),
               el('td', null,
-                el('select', { className: 'ss-input ss-input-sm', value: item.shapeId || 'all', onChange: (e) => updateField(i, 'shapeId', e.target.value) },
-                  shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Template', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
+              el('td', null, item.tier || 'Standard'),
+              el('td', null, getShapeSummary(item)),
               el('td', null,
                 el('div', { className: 'ss-template-config-summary' },
                   el('div', { className: 'ss-template-config-line' },
@@ -833,19 +1061,40 @@
                   el('div', { className: 'ss-template-config-line' },
                     el('strong', null, __('Fields:', 'sign-selector') + ' '),
                     el('span', null, getFieldSummary(item))
-                  ),
+                  )
+                )
+              ),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
                   el('button', {
                     type: 'button',
                     className: 'ss-btn ss-btn-sm',
-                    onClick: () => openTemplateOptions(i)
-                  }, __('Configure', 'sign-selector'))
+                    onClick: () => openTemplateOptions(index)
+                  }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(index) }, __('Remove', 'sign-selector'))
                 )
-              ),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              )
             )
           )
         )
+      ),
+      totalPages > 1 && el('div', { className: 'ss-pagination' },
+        el('button', {
+          type: 'button',
+          className: 'ss-btn ss-btn-sm',
+          disabled: currentPage <= 1,
+          onClick: () => setCurrentPage((page) => Math.max(1, page - 1))
+        }, __('Previous', 'sign-selector')),
+        el('span', { className: 'ss-pagination-label' }, `${__('Page', 'sign-selector')} ${currentPage} ${__('of', 'sign-selector')} ${totalPages}`),
+        el('button', {
+          type: 'button',
+          className: 'ss-btn ss-btn-sm',
+          disabled: currentPage >= totalPages,
+          onClick: () => setCurrentPage((page) => Math.min(totalPages, page + 1))
+        }, __('Next', 'sign-selector'))
       ),
       el('div', { className: 'ss-save-bar' },
         el('button', { className: 'ss-btn ss-btn-primary', onClick: saveTemplates }, __('Save Templates', 'sign-selector'))
@@ -853,9 +1102,55 @@
       el(Toast, toast),
       editingTemplateIndex !== null && items[editingTemplateIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeTemplateOptions },
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
-          el('h3', { className: 'ss-template-options-title' }, __('Template Options', 'sign-selector')),
+          el('h3', { className: 'ss-template-options-title' }, isAddingTemplate ? __('Add Template', 'sign-selector') : __('Edit Template', 'sign-selector')),
           el('p', { className: 'ss-template-options-subtitle' }, items[editingTemplateIndex].label || items[editingTemplateIndex].id || __('Template', 'sign-selector')),
-          el('div', { className: 'ss-template-options-grid' },
+          el('div', { className: 'ss-template-form-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Basic Details', 'sign-selector')),
+              items[editingTemplateIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingTemplateIndex].imageUrl, alt: items[editingTemplateIndex].label || 'Template preview' }) : null,
+              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
+              el('div', { className: 'ss-img-cell' },
+                el('input', {
+                  className: 'ss-input',
+                  value: items[editingTemplateIndex].imageUrl || '',
+                  onChange: (e) => updateField(editingTemplateIndex, 'imageUrl', e.target.value)
+                }),
+                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingTemplateIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+              ),
+              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+              el('input', {
+                className: 'ss-input',
+                value: items[editingTemplateIndex].id || '',
+                onChange: (e) => updateField(editingTemplateIndex, 'id', e.target.value)
+              }),
+              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+              el('input', {
+                className: 'ss-input',
+                value: items[editingTemplateIndex].label || '',
+                onChange: (e) => updateField(editingTemplateIndex, 'label', e.target.value)
+              }),
+              el('label', { className: 'ss-template-field-label' }, __('Tier', 'sign-selector')),
+              el('select', {
+                className: 'ss-input',
+                value: items[editingTemplateIndex].tier || 'Standard',
+                onChange: (e) => updateField(editingTemplateIndex, 'tier', e.target.value)
+              },
+                el('option', { value: 'Deluxe' }, 'Deluxe'),
+                el('option', { value: 'Standard' }, 'Standard')
+              ),
+              el('label', { className: 'ss-template-field-label' }, __('Shape', 'sign-selector')),
+              el('select', {
+                className: 'ss-input',
+                value: items[editingTemplateIndex].shapeId || 'all',
+                onChange: (e) => updateField(editingTemplateIndex, 'shapeId', e.target.value)
+              },
+                shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+              ),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                el(Toggle, { checked: items[editingTemplateIndex].enabled !== false, onChange: (v) => updateField(editingTemplateIndex, 'enabled', v) })
+              )
+            ),
             el('div', { className: 'ss-template-options-section' },
               el('h4', null, __('Sign Styles', 'sign-selector')),
               signStyleOptions.map((style) =>
@@ -884,6 +1179,7 @@
             )
           ),
           el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn', onClick: closeTemplateOptions }, __('Close', 'sign-selector')),
             el('button', { className: 'ss-btn ss-btn-primary', onClick: closeTemplateOptions }, __('Done', 'sign-selector'))
           )
         )
@@ -901,6 +1197,8 @@
   const PaintColorsTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/paint-colors');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingPaint, setIsAddingPaint] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -909,7 +1207,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', hex: '#ffffff', price: 0, image: '', imageUrl: '', enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', hex: '#ffffff', price: 0, image: '', imageUrl: '', enabled: true }];
+      setItems(nextItems);
+      setIsAddingPaint(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingPaint(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingPaint(false);
     };
 
     const savePaintColors = () => {
@@ -927,11 +1238,9 @@
         el('thead', null,
           el('tr', null,
             el('th', null, __('Color', 'sign-selector')),
-            el('th', null, __('Image', 'sign-selector')),
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Paint', 'sign-selector')),
             el('th', null, __('Hex', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
@@ -940,16 +1249,21 @@
             el('tr', { key: i },
               el('td', null, el('div', { className: 'ss-color-preview', style: { backgroundColor: item.hex || '#ccc' } })),
               el('td', null,
-                el('div', { className: 'ss-img-cell' },
-                  item.imageUrl ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label }) : null,
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Paint', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'color', value: item.hex || '#ffffff', onChange: (e) => updateField(i, 'hex', e.target.value) })),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null, item.hex || '#ffffff'),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -958,6 +1272,32 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: savePaintColors }, __('Save Paint Colors', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingPaint ? __('Add Paint Color', 'sign-selector') : __('Edit Paint Color', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            items[editingIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingIndex].imageUrl, alt: items[editingIndex].label || 'Paint preview' }) : null,
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Hex', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'color', value: items[editingIndex].hex || '#ffffff', onChange: (e) => updateField(editingIndex, 'hex', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Texture Image URL', 'sign-selector')),
+            el('div', { className: 'ss-img-cell' },
+              el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
+              el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -971,6 +1311,8 @@
   const AddonsTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/addons');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingAddon, setIsAddingAddon] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -980,7 +1322,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', price: 0, enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true }];
+      setItems(nextItems);
+      setIsAddingAddon(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingAddon(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingAddon(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -993,21 +1348,31 @@
       el('table', { className: 'ss-table' },
         el('thead', null,
           el('tr', null,
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Add-on', 'sign-selector')),
             el('th', null, __('Price ($)', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
             el('tr', { key: i },
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.price ?? 0, onChange: (e) => updateField(i, 'price', e.target.value) })),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Add-on', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
+                )
+              ),
+              el('td', null, Number(item.price ?? 0).toFixed(2)),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -1016,6 +1381,26 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Add-ons', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingAddon ? __('Add Add-on', 'sign-selector') : __('Edit Add-on', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -1029,6 +1414,8 @@
   const MountingHardwareTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/mounting-hardware');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isAddingHardware, setIsAddingHardware] = useState(false);
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -1038,7 +1425,20 @@
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', price: 0, enabled: true }]);
+      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true }];
+      setItems(nextItems);
+      setIsAddingHardware(true);
+      setEditingIndex(nextItems.length - 1);
+    };
+
+    const openEditor = (index) => {
+      setIsAddingHardware(false);
+      setEditingIndex(index);
+    };
+
+    const closeEditor = () => {
+      setEditingIndex(null);
+      setIsAddingHardware(false);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -1051,21 +1451,31 @@
       el('table', { className: 'ss-table' },
         el('thead', null,
           el('tr', null,
-            el('th', null, __('ID', 'sign-selector')),
-            el('th', null, __('Label', 'sign-selector')),
+            el('th', null, __('Hardware', 'sign-selector')),
             el('th', null, __('Price ($)', 'sign-selector')),
-            el('th', null, __('Enabled', 'sign-selector')),
+            el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
             el('tr', { key: i },
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.price ?? 0, onChange: (e) => updateField(i, 'price', e.target.value) })),
-              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
+              el('td', null,
+                el('div', { className: 'ss-template-meta' },
+                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Hardware', 'sign-selector')),
+                  el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
+                )
+              ),
+              el('td', null, Number(item.price ?? 0).toFixed(2)),
+              el('td', null,
+                el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
+              ),
+              el('td', null,
+                el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
+                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
+                )
+              )
             )
           )
         )
@@ -1074,6 +1484,26 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Hardware', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, isAddingHardware ? __('Add Hardware', 'sign-selector') : __('Edit Hardware', 'sign-selector')),
+          el('div', { className: 'ss-template-options-section' },
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+            el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
+            el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeEditor }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
