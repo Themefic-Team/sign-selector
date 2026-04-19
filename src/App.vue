@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSignSelectorState } from './useSignSelectorState'
 
 const {
@@ -11,12 +11,11 @@ const {
   installationSurfaces,
   shapes,
   slateColors,
-  designTemplates,
+  availableDesignTemplates,
   paintColors,
   addOns,
   mountingHardware,
   selectedSignStyle,
-  selectedSurface,
   selectedShape,
   selectedSlateColor,
   selectedTemplate,
@@ -34,19 +33,165 @@ const {
   submitConfiguration
 } = useSignSelectorState()
 
-const formattedPayload = computed(() => JSON.stringify(payload.value, null, 2))
-
 const formatOptionLabel = (label) => label.replace(/\s*\((\+)?\$\d+\)\s*$/i, '')
 
 const activeTier = ref('Deluxe')
-const tieredTemplates = computed(() => designTemplates.filter(t => t.tier === activeTier.value))
-const hasTiers = computed(() => designTemplates.some(t => t.tier === 'Deluxe') || designTemplates.some(t => t.tier === 'Standard'))
+const previewCaptureRef = ref(null)
+const reviewErrors = ref({})
+
+const FIELD_META = {
+  topText: {
+    label: 'Top Text',
+    placeholder: 'Family name or heading',
+    fallback: 'THE WILLOWS'
+  },
+  houseNumber: {
+    label: 'House Number',
+    placeholder: '183',
+    fallback: '183'
+  },
+  bottomText: {
+    label: 'Bottom Text',
+    placeholder: 'Street name or custom text',
+    fallback: 'EAST STREET'
+  }
+}
+
+const availableTemplateTiers = computed(() => [...new Set(availableDesignTemplates.value.map(t => t.tier).filter(Boolean))])
+const tieredTemplates = computed(() => availableDesignTemplates.value.filter(t => t.tier === activeTier.value))
+const hasTiers = computed(() => availableTemplateTiers.value.length > 1)
+
+watch(availableTemplateTiers, (tiers) => {
+  if (!tiers.length) {
+    activeTier.value = 'Deluxe'
+    return
+  }
+
+  if (!tiers.includes(activeTier.value)) {
+    activeTier.value = tiers[0]
+  }
+}, { immediate: true })
 
 const templateImageUrl = computed(() => {
   const tpl = selectedTemplate.value
   if (!tpl) return ''
-  return tpl.images?.[selectedShape.value?.id] || tpl.imageUrl || ''
+  return tpl.imageUrl || ''
 })
+
+const templateOverlayStyle = computed(() => {
+  if (!templateImageUrl.value) return {}
+
+  const paintTextureUrl = selectedPaintColor.value?.imageUrl || ''
+  const hasTexture = Boolean(paintTextureUrl)
+
+  return {
+    backgroundColor: selectedPaintColor.value?.hex || '#f2f4ef',
+    backgroundImage: hasTexture
+      ? `url(${templateImageUrl.value}), url(${paintTextureUrl})`
+      : `url(${templateImageUrl.value})`,
+    backgroundSize: hasTexture ? 'contain, cover' : 'contain',
+    backgroundPosition: hasTexture ? 'center, center' : 'center',
+    backgroundRepeat: hasTexture ? 'no-repeat, no-repeat' : 'no-repeat',
+    backgroundBlendMode: hasTexture ? 'multiply, normal' : 'multiply',
+    mixBlendMode: 'screen'
+  }
+})
+
+const normalizeTemplateFieldKey = (value) => {
+  const normalized = String(value || '').trim().toLowerCase()
+
+  if (['top', 'toptext', 'top_text', 'header', 'title'].includes(normalized)) return 'topText'
+  if (['number', 'house', 'housenumber', 'house_number', 'address'].includes(normalized)) return 'houseNumber'
+  if (['bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle'].includes(normalized)) return 'bottomText'
+
+  return ''
+}
+
+const getTemplateFieldsFromMetadata = (template) => {
+  if (Array.isArray(template?.fields) && template.fields.length) {
+    return template.fields
+      .map(normalizeTemplateFieldKey)
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+  }
+
+  const layout = String(template?.textLayout || '').trim().toLowerCase()
+
+  if (layout === 'top-number-bottom' || layout === 'top_house_bottom' || layout === 'full') {
+    return ['topText', 'houseNumber', 'bottomText']
+  }
+
+  if (layout === 'number') {
+    return ['houseNumber']
+  }
+
+  return ['houseNumber', 'bottomText']
+}
+
+const reviewFields = computed(() => {
+  return getTemplateFieldsFromMetadata(selectedTemplate.value)
+    .map((key) => ({ key, ...FIELD_META[key] }))
+    .filter((field) => field.key)
+})
+
+const getPreviewLayout = () => {
+  const keys = reviewFields.value.map((field) => field.key)
+
+  if (keys.includes('topText')) return 'top-number-bottom'
+  if (keys.includes('bottomText')) return 'number-bottom'
+  return 'number'
+}
+
+const getPreviewFieldValue = (fieldKey) => {
+  const value = String(state[fieldKey] || '').trim()
+
+  if (!value) {
+    return FIELD_META[fieldKey]?.fallback || ''
+  }
+
+  return fieldKey === 'houseNumber' ? value : value.toUpperCase()
+}
+
+const getPreviewTextStyle = (fieldKey) => {
+  const layout = getPreviewLayout()
+
+  if (layout === 'top-number-bottom') {
+    if (fieldKey === 'topText') return { top: '25%', fontSize: '12px', letterSpacing: '0.24em' }
+    if (fieldKey === 'houseNumber') return { top: '50%', fontSize: '52px', letterSpacing: '0.03em' }
+    return { top: '74%', fontSize: '14px', letterSpacing: '0.18em' }
+  }
+
+  if (layout === 'number-bottom') {
+    if (fieldKey === 'houseNumber') return { top: '44%', fontSize: '56px', letterSpacing: '0.02em' }
+    return { top: '72%', fontSize: '14px', letterSpacing: '0.18em' }
+  }
+
+  return { top: '50%', fontSize: '56px', letterSpacing: '0.02em' }
+}
+
+const clearFieldError = (fieldKey) => {
+  if (!reviewErrors.value[fieldKey]) return
+
+  const nextErrors = { ...reviewErrors.value }
+  delete nextErrors[fieldKey]
+  reviewErrors.value = nextErrors
+}
+
+const validateReviewFields = () => {
+  const errors = {}
+
+  reviewFields.value.forEach((field) => {
+    if (!String(state[field.key] || '').trim()) {
+      errors[field.key] = `${field.label} is required.`
+    }
+  })
+
+  reviewErrors.value = errors
+  state.status = Object.keys(errors).length ? 'error' : 'idle'
+  state.message = Object.keys(errors).length ? 'Please complete all required fields before adding to cart.' : ''
+
+  return Object.keys(errors).length === 0
+}
 
 const getAspectRatio = (shape) => {
   if (!shape?.width || !shape?.height) {
@@ -80,201 +225,22 @@ const getPreviewShapeStyle = (shape) => ({
 })
 
 const onSubmit = async () => {
-  let previewImageDataUrl = ''
-  let previewImageName = ''
+  state.topText = String(state.topText || '').trim()
+  state.houseNumber = String(state.houseNumber || '').trim()
+  state.bottomText = String(state.bottomText || '').trim()
 
-  try {
-    // Load an image cross-origin, resolves null silently on failure
-    const loadImg = (url) =>
-      new Promise((resolve) => {
-        if (!url) return resolve(null)
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => resolve(img)
-        img.onerror = () => resolve(null)
-        // cache-bust to avoid stale CORS preflight blocks
-        img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now()
-      })
-
-    const CW = 800
-    const CH = 520
-    const canvas = document.createElement('canvas')
-    canvas.width = CW
-    canvas.height = CH
-    const ctx = canvas.getContext('2d')
-
-    // ── 1. Surface background ──────────────────────────
-    const surfaceImg = await loadImg(selectedSurface.value.imageUrl)
-    if (surfaceImg) {
-      ctx.drawImage(surfaceImg, 0, 0, CW, CH)
-    } else {
-      ctx.fillStyle = '#d9c9a8'
-      ctx.fillRect(0, 0, CW, CH)
-    }
-    ctx.fillStyle = 'rgba(0,0,0,0.14)'
-    ctx.fillRect(0, 0, CW, CH)
-
-    // ── 2. Sign dimensions ────────────────────────────
-    const shape = selectedShape.value
-    const shapeId = shape.id
-    const ratio = shape.width && shape.height ? shape.width / shape.height : 1
-    const isRound = shapeId === 'round'
-    const isOval = shapeId === 'oval'
-    const isArch = shapeId === 'arch'
-
-    let signW, signH
-    if (isRound) {
-      const d = Math.round(Math.min(CW, CH) * 0.52)
-      signW = d
-      signH = d
-    } else if (isOval) {
-      signW = Math.round(CW * 0.60)
-      signH = Math.round(signW / ratio)
-    } else {
-      // rectangle or arch
-      signW = Math.round(CW * 0.40)
-      signH = Math.round(signW / ratio)
-    }
-
-    // clamp so sign never overflows canvas
-    if (signH > CH * 0.84) {
-      signH = Math.round(CH * 0.84)
-      signW = Math.round(signH * ratio)
-    }
-
-    const sx = Math.round((CW - signW) / 2)
-    const sy = Math.round((CH - signH) / 2)
-    const cx = sx + signW / 2
-    const cy = sy + signH / 2
-
-    // ── 3. Reusable shape path builder ───────────────
-    const shapePath = () => {
-      ctx.beginPath()
-      if (isRound) {
-        ctx.arc(cx, cy, signW / 2, 0, Math.PI * 2)
-      } else if (isOval) {
-        ctx.ellipse(cx, cy, signW / 2, signH / 2, 0, 0, Math.PI * 2)
-      } else if (isArch) {
-        // Flat bottom with rounded dome top (matches UI preview)
-        const shoulderY = sy + signH * 0.56
-        ctx.moveTo(sx, sy + signH)
-        ctx.lineTo(sx, shoulderY)
-        ctx.quadraticCurveTo(sx, sy, cx, sy)
-        ctx.quadraticCurveTo(sx + signW, sy, sx + signW, shoulderY)
-        ctx.lineTo(sx + signW, sy + signH)
-        ctx.lineTo(sx, sy + signH)
-      } else {
-        // rectangle
-        const r = 12
-        ctx.moveTo(sx + r, sy)
-        ctx.lineTo(sx + signW - r, sy)
-        ctx.arcTo(sx + signW, sy, sx + signW, sy + r, r)
-        ctx.lineTo(sx + signW, sy + signH - r)
-        ctx.arcTo(sx + signW, sy + signH, sx + signW - r, sy + signH, r)
-        ctx.lineTo(sx + r, sy + signH)
-        ctx.arcTo(sx, sy + signH, sx, sy + signH - r, r)
-        ctx.lineTo(sx, sy + r)
-        ctx.arcTo(sx, sy, sx + r, sy, r)
-      }
-      ctx.closePath()
-    }
-
-    // ── 4. Draw sign fill + slate texture ────────────
-    ctx.save()
-    shapePath()
-    ctx.clip()
-
-    // solid slate base color
-    ctx.fillStyle = '#2b3239'
-    ctx.fillRect(sx - 1, sy - 1, signW + 2, signH + 2)
-
-    // Use the base slate texture image for export to avoid artifacts in pre-cut shape assets.
-    const slateImgUrl = selectedSlateColor.value.imageUrl
-    const slateImg = await loadImg(slateImgUrl)
-    if (slateImg) {
-      ctx.globalAlpha = 0.9
-      ctx.drawImage(slateImg, sx, sy, signW, signH)
-      ctx.globalAlpha = 1
-    }
-
-    // subtle dark overlay (matches CSS gradient overlay)
-    ctx.fillStyle = 'rgba(0,0,0,0.14)'
-    ctx.fillRect(sx - 1, sy - 1, signW + 2, signH + 2)
-
-    ctx.restore()
-
-    // ── 5. Sign border ────────────────────────────────
-    ctx.save()
-    shapePath()
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    ctx.restore()
-
-    // ── 6. Text (clipped inside sign) ────────────────
-    const paintHex = selectedPaintColor.value.hex || '#f2f4ef'
-    const paintTextureImg = await loadImg(selectedPaintColor.value.imageUrl)
-    const houseText = String(state.houseNumber || '183')
-    const streetText = String(state.bottomText || '').toUpperCase()
-
-    const numSize = Math.round(Math.min(signH * 0.38, signW * 0.30))
-    const streetSize = Math.round(numSize * 0.28)
-
-    ctx.save()
-    shapePath()
-    ctx.clip()
-    ctx.fillStyle = paintHex
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'alphabetic'
-
-    ctx.font = `bold ${numSize}px Georgia, "Times New Roman", serif`
-    const lineSpacing = streetText ? numSize * 0.08 : 0
-    const totalTextH = streetText ? numSize + lineSpacing + streetSize : numSize
-    const textStartY = cy - totalTextH / 2 + numSize
-
-    const drawTextWithPaint = (text, font, x, y) => {
-      if (!text) return
-
-      if (!paintTextureImg) {
-        ctx.fillStyle = paintHex
-        ctx.font = font
-        ctx.fillText(text, x, y)
-        return
-      }
-
-      const maskCanvas = document.createElement('canvas')
-      maskCanvas.width = CW
-      maskCanvas.height = CH
-      const maskCtx = maskCanvas.getContext('2d')
-
-      maskCtx.textAlign = 'center'
-      maskCtx.textBaseline = 'alphabetic'
-      maskCtx.font = font
-      maskCtx.fillStyle = '#fff'
-      maskCtx.fillText(text, x, y)
-
-      // Keep paint texture inside text glyphs.
-      maskCtx.globalCompositeOperation = 'source-in'
-      maskCtx.drawImage(paintTextureImg, sx, sy, signW, signH)
-
-      ctx.drawImage(maskCanvas, 0, 0)
-    }
-
-    drawTextWithPaint(houseText, `bold ${numSize}px Georgia, "Times New Roman", serif`, cx, textStartY)
-
-    if (streetText) {
-      drawTextWithPaint(streetText, `${streetSize}px Georgia, "Times New Roman", serif`, cx, textStartY + lineSpacing + streetSize + 4)
-    }
-
-    ctx.restore()
-
-    previewImageDataUrl = canvas.toDataURL('image/png', 0.92)
-    previewImageName = `sign-preview-${Date.now()}.png`
-  } catch (err) {
-    console.warn('Preview capture failed:', err)
+  if (!validateReviewFields()) {
+    return
   }
 
-  await submitConfiguration({ previewImageDataUrl, previewImageName })
+  await submitConfiguration({
+    previewImageName: `sign-preview-${Date.now()}.png`,
+    checkoutOverrides: {
+      topText: reviewFields.value.some((field) => field.key === 'topText') ? state.topText : '',
+      houseNumber: reviewFields.value.some((field) => field.key === 'houseNumber') ? state.houseNumber : '',
+      bottomText: reviewFields.value.some((field) => field.key === 'bottomText') ? state.bottomText : ''
+    }
+  })
 }
 </script>
 
@@ -434,8 +400,22 @@ const onSubmit = async () => {
           </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
             <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <!-- <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
-              <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span> -->
+              <div
+                v-if="templateImageUrl"
+                class="preview-template-overlay"
+                :style="templateOverlayStyle"
+              />
+              <!-- <div class="preview-live-text">
+                <span
+                  v-for="field in reviewFields"
+                  :key="field.key"
+                  class="preview-line"
+                  :class="field.key"
+                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
+                >
+                  {{ getPreviewFieldValue(field.key) }}
+                </span>
+              </div> -->
             </div>
           </div>
           <ul class="spec-list">
@@ -475,8 +455,12 @@ const onSubmit = async () => {
               </div>
             </div>
 
+            <p v-if="!availableDesignTemplates.length" class="template-empty">
+              No templates are available for the selected shape.
+            </p>
+
             <!-- Filtered templates by active tier -->
-            <div v-if="hasTiers" class="pill-grid template-grid">
+            <div v-else-if="hasTiers" class="pill-grid template-grid">
               <button
                 v-for="item in tieredTemplates"
                 :key="item.id"
@@ -485,23 +469,22 @@ const onSubmit = async () => {
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
-                <img v-if="item.images?.[selectedShape.id] || item.imageUrl" :src="item.images?.[selectedShape.id] || item.imageUrl" :alt="item.label" class="template-thumb" />
-                 
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
                 <span v-if="state.templateId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
 
             <!-- Fallback: templates without tier grouping -->
-            <div v-if="!hasTiers" class="pill-grid template-grid">
+            <div v-else class="pill-grid template-grid">
               <button
-                v-for="item in designTemplates"
+                v-for="item in availableDesignTemplates"
                 :key="item.id"
                 type="button"
                 class="tile template-tile"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
-                <img v-if="item.images?.[selectedShape.id] || item.imageUrl" :src="item.images?.[selectedShape.id] || item.imageUrl" :alt="item.label" class="template-thumb" />
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
                 <span>{{ item.label }}</span>
               </button>
             </div>
@@ -529,7 +512,6 @@ const onSubmit = async () => {
                   }"
                 />
                 <span class="paint-label">{{ item.label }}</span>
-                <span v-if="item.price > 0" class="paint-price">+${{ item.price.toFixed(0) }}</span>
                 <span v-if="state.paintColorId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
@@ -563,19 +545,19 @@ const onSubmit = async () => {
               <div
                 v-if="templateImageUrl"
                 class="preview-template-overlay"
-                :style="{
-                  backgroundColor: selectedPaintColor.hex,
-                  backgroundImage: selectedPaintColor.imageUrl ? `url(${selectedPaintColor.imageUrl})` : 'none',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  WebkitMaskImage: `url(${templateImageUrl})`,
-                  maskImage: `url(${templateImageUrl})`
-                }"
+                :style="templateOverlayStyle"
               />
-              <!-- <template v-else>
-                <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
-                <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
-              </template> -->
+              <!-- <div class="preview-live-text">
+                <span
+                  v-for="field in reviewFields"
+                  :key="field.key"
+                  class="preview-line"
+                  :class="field.key"
+                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
+                >
+                  {{ getPreviewFieldValue(field.key) }}
+                </span>
+              </div> -->
             </div>
           </div>
           <ul class="spec-list">
@@ -592,12 +574,21 @@ const onSubmit = async () => {
       <!-- ═══ Step 4: Review & Add to Cart ═══ -->
       <div v-if="state.currentStep === 4" class="split-layout">
         <div class="panel-stack">
-          <section class="panel review-panel">
-            <label class="field-label">House Number</label>
-            <input v-model="state.houseNumber" type="text" class="field-input" />
+          <section class="panel review-panel"> 
+            <p v-if="state.message && state.status === 'error'" class="form-error">{{ state.message }}</p>
 
-            <label class="field-label">Bottom Text</label>
-            <input v-model="state.bottomText" type="text" class="field-input" placeholder="Street name or custom text" />
+            <template v-for="field in reviewFields" :key="field.key">
+              <label class="field-label">{{ field.label }}</label>
+              <input
+                v-model="state[field.key]"
+                type="text"
+                class="field-input"
+                :class="{ 'has-error': reviewErrors[field.key] }"
+                :placeholder="field.placeholder"
+                @input="clearFieldError(field.key)"
+              />
+              <small v-if="reviewErrors[field.key]" class="field-error">{{ reviewErrors[field.key] }}</small>
+            </template>
 
             <label class="field-label">Sign Style</label>
             <select v-model="state.signStyleId" class="field-input">
@@ -618,7 +609,6 @@ const onSubmit = async () => {
             <select v-model="state.hardwareId" class="field-input">
               <option v-for="item in mountingHardware" :key="item.id" :value="item.id">{{ item.label }}</option>
             </select>
-
           </section>
           
           <div class="footer-actions" v-if="state.currentStep > 1">
@@ -630,31 +620,31 @@ const onSubmit = async () => {
         </div>
         <aside class="preview-card summary-card">
           <header class="order-summary-header">Order Summary</header>
-          <div class="preview-canvas" :style="preview.surfaceStyle">
+          <div ref="previewCaptureRef"   class="preview-canvas" :style="preview.surfaceStyle">
             <div class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
               <div
                 v-if="templateImageUrl"
                 class="preview-template-overlay"
-                :style="{
-                  backgroundColor: selectedPaintColor.hex,
-                  backgroundImage: selectedPaintColor.imageUrl ? `url(${selectedPaintColor.imageUrl})` : 'none',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  WebkitMaskImage: `url(${templateImageUrl})`,
-                  maskImage: `url(${templateImageUrl})`
-                }"
+                :style="templateOverlayStyle"
               />
-              <template v-else>
-                <span class="preview-number" :style="preview.textStyle">{{ state.houseNumber || '183' }}</span>
-                <span class="preview-street" :style="preview.textStyle">{{ state.bottomText || 'EAST STREET' }}</span>
-              </template>
+              <!-- <div class="preview-live-text">
+                <span
+                  v-for="field in reviewFields"
+                  :key="field.key"
+                  class="preview-line"
+                  :class="field.key"
+                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
+                >
+                  {{ getPreviewFieldValue(field.key) }}
+                </span>
+              </div> -->
             </div>
           </div> 
           <ul class="summary-list">
             <li class="summary-item"><span>Shape &amp; Size: <strong>{{ selectedShape.label }}</strong></span><strong>${{ selectedShape.basePrice.toFixed(2) }}</strong></li>
             <li class="summary-item"><span>Slate Color: <strong>{{ selectedSlateColor.label }}</strong></span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
-            <li class="summary-item"><span>Template: <strong>{{ selectedTemplate?.label }}</strong></span><strong>${{ (selectedTemplate?.price || 0).toFixed(2) }}</strong></li>
-            <li class="summary-item"><span>Paint Color: <strong>{{ selectedPaintColor.label }}</strong></span><strong>${{ selectedPaintColor.price.toFixed(2) }}</strong></li>
+            <li class="summary-item"><span>Template: <strong>{{ selectedTemplate?.label }}</strong></span><strong>Included</strong></li>
+            <li class="summary-item"><span>Paint Color: <strong>{{ selectedPaintColor.label }}</strong></span><strong>Included</strong></li>
             <li class="divider"></li>
             <li class="summary-item-main"><span><strong>{{ formatOptionLabel(selectedAddOn.label) }}</strong></span><strong>+${{ payload.pricing.addOn.toFixed(2) }}</strong></li>
             <li class="summary-item-main"><span><strong>{{ formatOptionLabel(selectedHardware.label) }}</strong></span><strong>+${{ payload.pricing.hardware.toFixed(2) }}</strong></li>
@@ -671,10 +661,10 @@ const onSubmit = async () => {
         <button v-else type="button" class="tf-primary-btn" @click="onSubmit">Add to Cart</button>
       </div>
 
-      <section class="payload-box">
+      <!-- <section class="payload-box">
         <h4>Configuration Object Output</h4>
         <pre>{{ formattedPayload }}</pre>
-      </section>
+      </section> -->
     </div>
   </section>
 </template>
@@ -1432,7 +1422,15 @@ const onSubmit = async () => {
 }
 
 .template-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
+}
+
+.template-empty {
+  margin: 0;
+  color: var(--Text-Paragraph, #4D4B58);
+  font-size: 14px;
+  line-height: 150%;
 }
 
 .template-tile {
@@ -1453,12 +1451,32 @@ const onSubmit = async () => {
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
+}
+
+.preview-live-text {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.preview-line {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 86%;
+  text-align: center;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.preview-line.houseNumber {
+  font-weight: 700;
+}
+
+.preview-line.topText,
+.preview-line.bottomText {
+  font-weight: 600;
 }
 
 .preview-canvas {
@@ -1472,6 +1490,7 @@ const onSubmit = async () => {
 
 .preview-sign {
   position: relative;
+  isolation: isolate;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1555,6 +1574,37 @@ const onSubmit = async () => {
   min-height: 42px;
   font-size: 15px;
   color: #4c4b57;
+}
+
+.field-input.has-error {
+  border-color: #d14343;
+  box-shadow: 0 0 0 1px rgba(209, 67, 67, 0.14);
+}
+
+.field-help {
+  margin: 0 0 12px;
+  color: var(--Text-Paragraph, #4D4B58);
+  font-size: 13px;
+  line-height: 150%;
+}
+
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 150%;
+}
+
+.form-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #f1b4b4;
+  border-radius: 8px;
+  background: #fff1f1;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 150%;
 }
 
 .summary-card {
@@ -1735,6 +1785,10 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .pill-grid.template-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
  
   .label {
     font-size: 11px;
@@ -1770,6 +1824,10 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   .swatch-grid,
   .pill-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pill-grid.template-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .surface-grid {

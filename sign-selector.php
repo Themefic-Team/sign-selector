@@ -40,7 +40,7 @@ class SignSelector {
         $this->admin = new Sign_Selector_Admin();
 
         add_action( 'init', array( $this, 'init' ) ); 
-    }
+    } 
     public function init() {
         add_action( 'wp_enqueue_scripts', [ $this, 'register_assets' ] );
         add_filter( 'script_loader_tag', [ $this, 'tf_loadScriptAsModule' ], 10, 3 );
@@ -186,15 +186,15 @@ class SignSelector {
             );
         }
 
-        $preview_data_url = '';
-        if ( ! empty( $decoded['checkout']['previewImageDataUrl'] ) && is_string( $decoded['checkout']['previewImageDataUrl'] ) ) {
-            $preview_data_url = $decoded['checkout']['previewImageDataUrl'];
-        }
+        // $preview_data_url = '';
+        // if ( ! empty( $decoded['checkout']['previewImageDataUrl'] ) && is_string( $decoded['checkout']['previewImageDataUrl'] ) ) {
+        //     $preview_data_url = $decoded['checkout']['previewImageDataUrl'];
+        // }
 
-        // Never keep raw base64 image data inside the configuration structure.
-        if ( isset( $decoded['checkout']['previewImageDataUrl'] ) ) {
-            unset( $decoded['checkout']['previewImageDataUrl'] );
-        }
+        // // Never keep raw base64 image data inside the configuration structure.
+        // if ( isset( $decoded['checkout']['previewImageDataUrl'] ) ) {
+        //     unset( $decoded['checkout']['previewImageDataUrl'] );
+        // }
 
         $configuration = $this->sanitize_configuration_data( $decoded );
 
@@ -228,14 +228,14 @@ class SignSelector {
             }
         }
 
-        $preview_name = isset( $configuration['checkout']['previewImageName'] ) ? (string) $configuration['checkout']['previewImageName'] : '';
-        $preview_file = $this->save_preview_image( $preview_data_url, $preview_name );
+        // $preview_name = isset( $configuration['checkout']['previewImageName'] ) ? (string) $configuration['checkout']['previewImageName'] : '';
+        // $preview_file = $this->save_preview_image( $preview_data_url, $preview_name );
 
-        if ( ! empty( $preview_file['url'] ) ) {
-            $configuration['checkout']['previewImageUrl'] = $preview_file['url'];
-        }
+        // if ( ! empty( $preview_file['url'] ) ) {
+        //     $configuration['checkout']['previewImageUrl'] = $preview_file['url'];
+        // }
 
-        unset( $configuration['checkout']['previewImageDataUrl'], $configuration['checkout']['previewImagePath'] );
+        // unset( $configuration['checkout']['previewImageDataUrl'], $configuration['checkout']['previewImagePath'] );
 
         $cart_item_data = array(
             'sign_selector_configuration' => $configuration,
@@ -284,6 +284,7 @@ class SignSelector {
         $config = $cart_item['sign_selector_configuration'];
 
         $meta_map = array(
+            __( 'Top Text', 'sign-selector' ) => $config['checkout']['topText'] ?? '',
             __( 'House Number', 'sign-selector' ) => $config['checkout']['houseNumber'] ?? '',
             __( 'Bottom Text', 'sign-selector' ) => $config['checkout']['bottomText'] ?? '',
             __( 'Sign Style', 'sign-selector' ) => $config['sign']['style']['label'] ?? '',
@@ -306,12 +307,12 @@ class SignSelector {
             );
         }
 
-        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
-            $item_data[] = array(
-                'name'  => __( 'Preview', 'sign-selector' ),
-                'value' => sprintf( '<a href="%1$s" target="_blank" rel="noopener">%2$s</a>', esc_url( $config['checkout']['previewImageUrl'] ), esc_html__( 'View image', 'sign-selector' ) ),
-            );
-        }
+        // if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+        //     $item_data[] = array(
+        //         'name'  => __( 'Preview', 'sign-selector' ),
+        //         'value' => sprintf( '<a href="%1$s" target="_blank" rel="noopener">%2$s</a>', esc_url( $config['checkout']['previewImageUrl'] ), esc_html__( 'View image', 'sign-selector' ) ),
+        //     );
+        // }
 
         return $item_data;
     }
@@ -360,6 +361,7 @@ class SignSelector {
         $config = $values['sign_selector_configuration'];
 
         $meta_map = array(
+            __( 'Top Text', 'sign-selector' ) => $config['checkout']['topText'] ?? '',
             __( 'House Number', 'sign-selector' ) => $config['checkout']['houseNumber'] ?? '',
             __( 'Bottom Text', 'sign-selector' ) => $config['checkout']['bottomText'] ?? '',
             __( 'Sign Style', 'sign-selector' ) => $config['sign']['style']['label'] ?? '',
@@ -379,9 +381,9 @@ class SignSelector {
             $item->add_meta_data( $label, wp_kses_post( $value ) );
         }
 
-        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
-            $item->add_meta_data( __( 'Preview Image', 'sign-selector' ), esc_url_raw( $config['checkout']['previewImageUrl'] ) );
-        }
+        // if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+        //     $item->add_meta_data( __( 'Preview Image', 'sign-selector' ), esc_url_raw( $config['checkout']['previewImageUrl'] ) );
+        // }
 
         // Keep technical keys hidden from customer/admin order item meta views.
         $item->add_meta_data( '_sign_selector_cart_item_key', $cart_item_key );
@@ -467,6 +469,45 @@ class SignSelector {
 
         if ( empty( $configuration['pricing']['total'] ) || (float) $configuration['pricing']['total'] <= 0 ) {
             return false;
+        }
+
+        $required_fields = array();
+
+        if ( isset( $configuration['sign']['template']['fields'] ) && is_array( $configuration['sign']['template']['fields'] ) ) {
+            $required_fields = $configuration['sign']['template']['fields'];
+        } elseif ( ! empty( $configuration['sign']['template']['textLayout'] ) && is_string( $configuration['sign']['template']['textLayout'] ) ) {
+            $layout = strtolower( sanitize_text_field( $configuration['sign']['template']['textLayout'] ) );
+
+            if ( in_array( $layout, array( 'top-number-bottom', 'top_house_bottom', 'full' ), true ) ) {
+                $required_fields = array( 'topText', 'houseNumber', 'bottomText' );
+            } elseif ( in_array( $layout, array( 'number-bottom', 'number_and_bottom' ), true ) ) {
+                $required_fields = array( 'houseNumber', 'bottomText' );
+            } elseif ( 'number' === $layout ) {
+                $required_fields = array( 'houseNumber' );
+            }
+        }
+
+        if ( empty( $required_fields ) ) {
+            $required_fields = array( 'houseNumber', 'bottomText' );
+        }
+
+        foreach ( $required_fields as $field_key ) {
+            $normalized_key = strtolower( trim( (string) $field_key ) );
+            $lookup_key     = 'houseNumber';
+
+            if ( in_array( $normalized_key, array( 'top', 'toptext', 'top_text', 'header', 'title' ), true ) ) {
+                $lookup_key = 'topText';
+            } elseif ( in_array( $normalized_key, array( 'number', 'house', 'housenumber', 'house_number', 'address' ), true ) ) {
+                $lookup_key = 'houseNumber';
+            } elseif ( in_array( $normalized_key, array( 'bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle' ), true ) ) {
+                $lookup_key = 'bottomText';
+            }
+
+            $value = isset( $configuration['checkout'][ $lookup_key ] ) ? trim( (string) $configuration['checkout'][ $lookup_key ] ) : '';
+
+            if ( '' === $value ) {
+                return false;
+            }
         }
 
         return true;

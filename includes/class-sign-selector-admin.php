@@ -211,11 +211,67 @@ class Sign_Selector_Admin {
         return $sanitized;
     }
 
+    /**
+     * Build default design templates from bundled template assets.
+     *
+     * Expected structure:
+     * assets/images/template/{shape}/{tier}/*.png
+     *
+     * @param string   $template_base_url Base URL to template image root.
+     * @param string[] $all_sign_style_ids Available sign style ids.
+     * @return array<int, array<string, mixed>>
+     */
+    private function build_default_design_templates( $template_base_url, $all_sign_style_ids ) {
+        $template_root = trailingslashit( SIGN_SELECTOR_PATH ) . 'assets/images/template/';
+        $shape_dirs = array( 'arch', 'oval', 'rectangle', 'round' );
+        $tier_dirs  = array(
+            'deluxe'  => 'Deluxe',
+            'standard' => 'Standard',
+        );
+
+        $templates = array();
+
+        foreach ( $shape_dirs as $shape_dir ) {
+            foreach ( $tier_dirs as $tier_dir => $tier_label ) {
+                $pattern = $template_root . $shape_dir . '/' . $tier_dir . '/*.png';
+                $files   = glob( $pattern );
+
+                if ( ! is_array( $files ) || empty( $files ) ) {
+                    continue;
+                }
+
+                natsort( $files );
+
+                foreach ( $files as $file_path ) {
+                    $file_name = basename( $file_path );
+                    $stem      = pathinfo( $file_name, PATHINFO_FILENAME );
+                    $digits    = preg_replace( '/\D+/', '', $stem );
+                    $suffix    = '' !== $digits ? str_pad( $digits, 2, '0', STR_PAD_LEFT ) : sanitize_title( $stem );
+
+                    $templates[] = array(
+                        'id'           => sprintf( 'tpl-%s-%s-%s', $shape_dir, $tier_dir, $suffix ),
+                        'label'        => sprintf( '%s %s #%s', ucfirst( $shape_dir ), $tier_label, $suffix ),
+                        'tier'         => $tier_label,
+                        'shapeId'      => $shape_dir,
+                        'signStyleIds' => $all_sign_style_ids,
+                        'textLayout'   => 'number-bottom',
+                        'fields'       => array( 'houseNumber', 'bottomText' ),
+                        'price'        => 0,
+                        'imageUrl'     => $template_base_url . rawurlencode( $shape_dir ) . '/' . rawurlencode( $tier_dir ) . '/' . rawurlencode( $file_name ),
+                        'enabled'      => true,
+                    );
+                }
+            }
+        }
+
+        return $templates;
+    }
+
     /* ─── Seed defaults on first activation ─────────────────── */
 
     public function maybe_seed_defaults() {
         // Re-seed when the data version changes.
-        $current_version = '9';
+        $current_version = '11';
         if ( get_option( 'sign_selector_seeded' ) === $current_version ) {
             return;
         }
@@ -251,6 +307,10 @@ class Sign_Selector_Admin {
 </svg>', 'iconUrl' => '', 'enabled' => true, 'flow' => $all_sections ),
         );
 
+        $all_sign_style_ids = array_values( array_map( function( $style ) {
+            return isset( $style['id'] ) ? $style['id'] : '';
+        }, $sign_styles ) );
+
         // Installation Surfaces (25 pre-built)
         $surfaces = array();
         for ( $i = 1; $i <= 25; $i++ ) {
@@ -267,7 +327,7 @@ class Sign_Selector_Admin {
 
         // Shapes
         $shapes = array(
-            array( 'id' => 'rectangle', 'label' => '10" x 5"',  'width' => 10, 'height' => 5,  'basePrice' => 150, 'enabled' => true ),
+            array( 'id' => 'rectangle', 'label' => '13" x 10"',  'width' => 13, 'height' => 10,  'basePrice' => 150, 'enabled' => true ),
             array( 'id' => 'oval',      'label' => '13" x 9"',  'width' => 13, 'height' => 9,  'basePrice' => 129, 'enabled' => true ),
             array( 'id' => 'round',     'label' => '9" x 13"',  'width' => 9,  'height' => 13, 'basePrice' => 175, 'enabled' => true ),
             array( 'id' => 'arch',      'label' => '24" x 12"', 'width' => 24, 'height' => 12, 'basePrice' => 240, 'enabled' => true ),
@@ -324,14 +384,9 @@ class Sign_Selector_Admin {
         }
         unset( $sc );
 
-        // Design Templates – with tier (Deluxe / Standard) and PNG image
-        $template_base = $plugin_url . 'assets/images/template/';
-        $design_templates = array(
-            array( 'id' => 'tpl-01', 'label' => 'Deluxe #01',   'tier' => 'Deluxe',   'price' => 0, 'imageUrl' => $template_base . 'template-one.png', 'images' => array(), 'enabled' => true ),
-            array( 'id' => 'tpl-02', 'label' => 'Deluxe #02',   'tier' => 'Deluxe',   'price' => 0, 'imageUrl' => $template_base . 'template-one.png', 'images' => array(), 'enabled' => true ),
-            array( 'id' => 'tpl-03', 'label' => 'Standard #03', 'tier' => 'Standard', 'price' => 0, 'imageUrl' => $template_base . 'template-one.png', 'images' => array(), 'enabled' => true ),
-            array( 'id' => 'tpl-04', 'label' => 'Standard #04', 'tier' => 'Standard', 'price' => 0, 'imageUrl' => $template_base . 'template-one.png', 'images' => array(), 'enabled' => true ),
-        );
+        // Design Templates – seeded from assets/images/template/{shape}/{tier}/*.png.
+        $template_base     = $plugin_url . 'assets/images/template/';
+        $design_templates  = $this->build_default_design_templates( $template_base, $all_sign_style_ids );
 
         // Paint Colors
         $paint_colors = array(
@@ -385,6 +440,11 @@ class Sign_Selector_Admin {
             } ) );
         };
 
+        $design_templates = array_map(
+            array( $this, 'normalize_design_template_item' ),
+            $filter_enabled( $this->get_option_items( self::OPT_DESIGN_TEMPLATES ) )
+        );
+
         return array(
             'flowSections'     => self::FLOW_SECTIONS,
             'steps'            => $filter_enabled( $this->get_option_items( self::OPT_STEPS ) ),
@@ -392,10 +452,36 @@ class Sign_Selector_Admin {
             'surfaces'         => $filter_enabled( $this->get_option_items( self::OPT_SURFACES ) ),
             'shapes'           => $filter_enabled( $this->get_option_items( self::OPT_SHAPES ) ),
             'slateColors'      => $filter_enabled( $this->get_option_items( self::OPT_SLATE_COLORS ) ),
-            'designTemplates'  => $filter_enabled( $this->get_option_items( self::OPT_DESIGN_TEMPLATES ) ),
+            'designTemplates'  => $design_templates,
             'paintColors'      => $filter_enabled( $this->get_option_items( self::OPT_PAINT_COLORS ) ),
             'addons'           => $filter_enabled( $this->get_option_items( self::OPT_ADDONS ) ),
             'mountingHardware' => $filter_enabled( $this->get_option_items( self::OPT_MOUNTING_HARDWARE ) ),
         );
+    }
+
+    /**
+     * Ensure template field metadata is always available to the frontend.
+     *
+     * @param array<string,mixed> $item Template item.
+     * @return array<string,mixed>
+     */
+    private function normalize_design_template_item( $item ) {
+        if ( ! is_array( $item ) ) {
+            return array();
+        }
+
+        if ( ! isset( $item['fields'] ) || ! is_array( $item['fields'] ) ) {
+            $item['fields'] = array( 'houseNumber', 'bottomText' );
+        } else {
+            $item['fields'] = array_values( $item['fields'] );
+        }
+
+        if ( empty( $item['textLayout'] ) || ! is_string( $item['textLayout'] ) ) {
+            $item['textLayout'] = in_array( 'topText', $item['fields'], true )
+                ? 'top-number-bottom'
+                : ( in_array( 'bottomText', $item['fields'], true ) ? 'number-bottom' : 'number' );
+        }
+
+        return $item;
     }
 }

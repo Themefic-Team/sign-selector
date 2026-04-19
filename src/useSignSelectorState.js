@@ -17,6 +17,8 @@ const pluginDirectoryUrl = getPluginDirectoryUrl()
 /* ─── All data comes from admin-saved configuration (no hardcoded fallbacks) ── */
 
 const toArray = (val) => (Array.isArray(val) ? val : [])
+const normalizeShapeId = (val) => (typeof val === 'string' ? val.trim().toLowerCase() : '')
+const normalizeStyleId = (val) => (typeof val === 'string' ? val.trim().toLowerCase() : '')
 
 const stepDefinitions      = toArray(cfg.steps)
 const signStyles           = toArray(cfg.signStyles)
@@ -38,12 +40,17 @@ const slateColors = toArray(cfg.slateColors).map(item => ({
 
 const designTemplates = toArray(cfg.designTemplates).map(t => ({
   ...t,
-  price: Number(t.price) || 0
+  price: 0,
+  imageUrl: t.imageUrl || '',
+  textLayout: typeof t.textLayout === 'string' ? t.textLayout : '',
+  fields: Array.isArray(t.fields) ? t.fields : [],
+  shapeId: normalizeShapeId(t.shapeId) || 'all',
+  signStyleIds: Array.isArray(t.signStyleIds) ? t.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
 
 const paintColors = toArray(cfg.paintColors).map(p => ({
   ...p,
-  price: Number(p.price) || 0,
+  price: 0,
   imageUrl: p.imageUrl || ''
 }))
 
@@ -51,7 +58,7 @@ const paintColors = toArray(cfg.paintColors).map(p => ({
 
 const flowSectionLabels = cfg.flowSections || {
   'installation-surface': 'Installation Surface',
-  'size-shape': 'Size & Shape',
+  'size-shape': 'Size & Shape', 
   'slate-color': 'Slate Color',
   'design-template': 'Design Template',
   'paint-color': 'Paint Color',
@@ -74,17 +81,41 @@ const resolveInitialId = (arr, candidate, fallbackId) => {
   return fallbackId
 }
 
+const getTemplatesForSelection = (shapeId, signStyleId) => {
+  const normalizedShapeId = normalizeShapeId(shapeId)
+  const normalizedStyleId = normalizeStyleId(signStyleId)
+
+  return designTemplates.filter((item) => {
+    const itemShapeId = normalizeShapeId(item.shapeId) || 'all'
+    const shapeMatches = itemShapeId === 'all' || itemShapeId === normalizedShapeId
+
+    const assignedStyleIds = Array.isArray(item.signStyleIds)
+      ? item.signStyleIds.map(normalizeStyleId).filter(Boolean)
+      : null
+    const styleMatches = !Array.isArray(assignedStyleIds)
+      ? true
+      : assignedStyleIds.includes(normalizedStyleId)
+
+    return shapeMatches && styleMatches
+  })
+}
+
 export const useSignSelectorState = () => {
+  const initialShapeId = resolveInitialId(shapes, initialConfiguration?.sign?.shape?.id, shapes[0]?.id || '')
+  const initialSignStyleId = resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || '')
+  const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId)
+
   const state = reactive({
     currentStep: 1,
-    signStyleId: resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || ''),
+    signStyleId: initialSignStyleId,
     surfaceId: resolveInitialId(installationSurfaces, initialConfiguration?.sign?.surface?.id, installationSurfaces[0]?.id || ''),
-    shapeId: resolveInitialId(shapes, initialConfiguration?.sign?.shape?.id, shapes[0]?.id || ''),
+    shapeId: initialShapeId,
     slateColorId: resolveInitialId(slateColors, initialConfiguration?.sign?.slateColor?.id, slateColors[0]?.id || ''),
-    templateId: resolveInitialId(designTemplates, initialConfiguration?.sign?.template?.id, designTemplates[0]?.id || ''),
+    templateId: resolveInitialId(initialTemplates, initialConfiguration?.sign?.template?.id, initialTemplates[0]?.id || ''),
     paintColorId: resolveInitialId(paintColors, initialConfiguration?.sign?.paintColor?.id, paintColors[0]?.id || ''),
     addOnId: resolveInitialId(addOns, initialConfiguration?.sign?.addOn?.id, addOns[0]?.id || ''),
     hardwareId: resolveInitialId(mountingHardware, initialConfiguration?.sign?.hardware?.id, mountingHardware[0]?.id || ''),
+    topText: initialConfiguration?.checkout?.topText || '',
     houseNumber: initialConfiguration?.checkout?.houseNumber || '',
     bottomText: initialConfiguration?.checkout?.bottomText || '',
     editCartItemKey: frontendConfigRaw.editCartItemKey || initialConfiguration?.checkout?.editCartItemKey || '',
@@ -96,7 +127,8 @@ export const useSignSelectorState = () => {
   const selectedSurface = computed(() => safeFind(installationSurfaces, state.surfaceId))
   const selectedShape = computed(() => safeFind(shapes, state.shapeId))
   const selectedSlateColor = computed(() => safeFind(slateColors, state.slateColorId))
-  const selectedTemplate = computed(() => safeFind(designTemplates, state.templateId))
+  const availableDesignTemplates = computed(() => getTemplatesForSelection(state.shapeId, state.signStyleId))
+  const selectedTemplate = computed(() => safeFind(availableDesignTemplates.value, state.templateId) || { id: '', label: '', price: 0, imageUrl: '' })
   const selectedPaintColor = computed(() => safeFind(paintColors, state.paintColorId))
   const selectedAddOn = computed(() => safeFind(addOns, state.addOnId))
   const selectedHardware = computed(() => safeFind(mountingHardware, state.hardwareId))
@@ -131,8 +163,6 @@ export const useSignSelectorState = () => {
     return (
       (selectedShape.value?.basePrice || 0) +
       (selectedSlateColor.value?.price || 0) +
-      (selectedTemplate.value?.price || 0) +
-      (selectedPaintColor.value?.price || 0) +
       (selectedAddOn.value?.price || 0) +
       (selectedHardware.value?.price || 0)
     )
@@ -148,6 +178,7 @@ export const useSignSelectorState = () => {
       backgroundRepeat: 'no-repeat'
     },
     signStyle: {
+      backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
       backgroundImage: (selectedSlateColor.value.images?.[selectedShape.value.id] || selectedSlateColor.value.imageUrl)
         ? `linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), url("${selectedSlateColor.value.images?.[selectedShape.value.id] || selectedSlateColor.value.imageUrl}")`
         : 'none',
@@ -188,14 +219,15 @@ export const useSignSelectorState = () => {
     pricing: {
       base: selectedShape.value.basePrice,
       slate: selectedSlateColor.value.price,
-      template: selectedTemplate.value.price,
-      paint: selectedPaintColor.value.price,
+      template: 0,
+      paint: 0,
       addOn: selectedAddOn.value.price,
       hardware: selectedHardware.value.price,
       total: totalPrice.value
     },
     checkout: {
       step: state.currentStep,
+      topText: state.topText,
       houseNumber: state.houseNumber,
       bottomText: state.bottomText,
       editCartItemKey: state.editCartItemKey,
@@ -218,6 +250,19 @@ export const useSignSelectorState = () => {
 
   const nextStep = () => setStep(state.currentStep + 1)
   const prevStep = () => setStep(state.currentStep - 1)
+
+  watch([() => state.shapeId, () => state.signStyleId], () => {
+    const matchingTemplates = availableDesignTemplates.value
+
+    if (!matchingTemplates.length) {
+      state.templateId = ''
+      return
+    }
+
+    if (!matchingTemplates.some((item) => item.id === state.templateId)) {
+      state.templateId = matchingTemplates[0].id
+    }
+  }, { immediate: true })
 
   // When the user switches sign style the flow may have fewer steps;
   // clamp currentStep so it never exceeds the new total.
@@ -242,6 +287,7 @@ export const useSignSelectorState = () => {
       ...payload.value,
       checkout: {
         ...payload.value.checkout,
+        ...(options.checkoutOverrides || {}),
         previewImageDataUrl: options.previewImageDataUrl || '',
         previewImageName: options.previewImageName || ''
       }
@@ -289,6 +335,7 @@ export const useSignSelectorState = () => {
     shapes,
     slateColors,
     designTemplates,
+    availableDesignTemplates,
     paintColors,
     addOns,
     mountingHardware,

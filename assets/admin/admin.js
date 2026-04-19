@@ -608,34 +608,178 @@
   const DesignTemplatesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/design-templates');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
-    const [expandedRow, setExpandedRow] = useState(null);
-    const [shapeIds, setShapeIds] = useState(['default']);
+    const [shapeOptions, setShapeOptions] = useState([{ id: 'all', label: __('All Shapes', 'sign-selector') }]);
+    const [signStyleOptions, setSignStyleOptions] = useState([]);
+    const [editingTemplateIndex, setEditingTemplateIndex] = useState(null);
 
-    // Fetch shapes dynamically so newly added shapes appear as image override slots
+    const templateFieldOptions = [
+      { id: 'topText', label: __('Top Text', 'sign-selector') },
+      { id: 'houseNumber', label: __('House Number', 'sign-selector') },
+      { id: 'bottomText', label: __('Bottom Text', 'sign-selector') }
+    ];
+
     useEffect(() => {
       apiFetch({ path: '/sign-selector/v1/shapes' }).then((data) => {
-        const ids = (Array.isArray(data) ? data : []).map((s) => s.id).filter(Boolean);
-        setShapeIds(['default'].concat(ids));
+        const options = (Array.isArray(data) ? data : [])
+          .filter((shape) => shape && shape.id)
+          .map((shape) => ({ id: shape.id, label: shape.label || shape.id }));
+
+        setShapeOptions([{ id: 'all', label: __('All Shapes', 'sign-selector') }, ...options]);
+      }).catch(() => {});
+
+      apiFetch({ path: '/sign-selector/v1/sign-styles' }).then((data) => {
+        const options = (Array.isArray(data) ? data : [])
+          .filter((style) => style && style.id)
+          .map((style) => ({ id: style.id, label: style.label || style.id }));
+
+        setSignStyleOptions(options);
       }).catch(() => {});
     }, []);
 
     const updateField = (index, field, value) => {
       const next = [...items];
-      const parsed = field === 'price' ? Number(value) || 0 : value;
-      next[index] = { ...next[index], [field]: parsed };
+      next[index] = { ...next[index], [field]: value };
       setItems(next);
     };
 
-    const updateShapeImage = (index, shapeId, url) => {
+    const normalizeTemplateFieldKey = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+
+      if (['top', 'toptext', 'top_text', 'header', 'title'].includes(normalized)) return 'topText';
+      if (['number', 'house', 'housenumber', 'house_number', 'address'].includes(normalized)) return 'houseNumber';
+      if (['bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle'].includes(normalized)) return 'bottomText';
+
+      return '';
+    };
+
+    const getTemplateFields = (item) => {
+      if (Array.isArray(item.fields) && item.fields.length) {
+        return item.fields
+          .map(normalizeTemplateFieldKey)
+          .filter(Boolean)
+          .filter((value, index, arr) => arr.indexOf(value) === index);
+      }
+
+      const layout = String(item.textLayout || '').trim().toLowerCase();
+
+      if (layout === 'top-number-bottom' || layout === 'top_house_bottom' || layout === 'full') {
+        return ['topText', 'houseNumber', 'bottomText'];
+      }
+
+      if (layout === 'number') {
+        return ['houseNumber'];
+      }
+
+      return ['houseNumber', 'bottomText'];
+    };
+
+    const inferTextLayout = (fields) => {
+      if (fields.includes('topText')) return 'top-number-bottom';
+      if (fields.includes('bottomText')) return 'number-bottom';
+      if (fields.includes('houseNumber')) return 'number';
+      return 'number';
+    };
+
+    const toggleTemplateField = (index, fieldKey, checked) => {
       const next = [...items];
-      const images = { ...(next[index].images || {}) };
-      images[shapeId] = url;
-      next[index] = { ...next[index], images };
+      const currentFields = getTemplateFields(next[index]);
+      const updatedFields = checked
+        ? Array.from(new Set([...currentFields, fieldKey]))
+        : currentFields.filter((value) => value !== fieldKey);
+
+      next[index] = {
+        ...next[index],
+        fields: updatedFields,
+        textLayout: inferTextLayout(updatedFields)
+      };
+
       setItems(next);
+    };
+
+    const getAssignedSignStyleIds = (item) => {
+      if (Array.isArray(item.signStyleIds)) {
+        return item.signStyleIds;
+      }
+
+      return signStyleOptions.map((style) => style.id);
+    };
+
+    const toggleSignStyle = (index, styleId, checked) => {
+      const next = [...items];
+      const currentIds = getAssignedSignStyleIds(next[index]);
+      const newIds = checked
+        ? Array.from(new Set([...currentIds, styleId]))
+        : currentIds.filter((id) => id !== styleId);
+
+      next[index] = { ...next[index], signStyleIds: newIds };
+      setItems(next);
+    };
+
+    const openTemplateOptions = (index) => setEditingTemplateIndex(index);
+    const closeTemplateOptions = () => setEditingTemplateIndex(null);
+
+    const getStyleSummary = (item) => {
+      const assignedIds = getAssignedSignStyleIds(item);
+
+      if (!signStyleOptions.length || assignedIds.length === signStyleOptions.length) {
+        return __('All sign styles selected', 'sign-selector');
+      }
+
+      if (!assignedIds.length) {
+        return __('No sign styles selected', 'sign-selector');
+      }
+
+      const labels = assignedIds
+        .map((id) => signStyleOptions.find((style) => style.id === id)?.label || id)
+        .filter(Boolean);
+
+      return labels.join(', ');
+    };
+
+    const getFieldSummary = (item) => {
+      const activeFields = getTemplateFields(item);
+
+      if (!activeFields.length) {
+        return __('No text fields selected', 'sign-selector');
+      }
+
+      return activeFields
+        .map((id) => templateFieldOptions.find((field) => field.id === id)?.label || id)
+        .join(', ');
     };
 
     const addItem = () => {
-      setItems([...items, { id: uid(), label: '', tier: 'Standard', price: 0, imageUrl: '', images: {}, enabled: true }]);
+      setItems([...items, {
+        id: uid(),
+        label: '',
+        tier: 'Standard',
+        shapeId: 'all',
+        signStyleIds: signStyleOptions.map((style) => style.id),
+        fields: ['houseNumber'],
+        textLayout: 'number',
+        imageUrl: '',
+        enabled: true
+      }]);
+    };
+
+    const saveTemplates = () => {
+      const normalized = items.map(({ images, price, ...item }) => {
+        const fields = getTemplateFields(item);
+
+        return {
+          ...item,
+          price: 0,
+          shapeId: item.shapeId || 'all',
+          signStyleIds: Array.isArray(item.signStyleIds)
+            ? item.signStyleIds
+            : signStyleOptions.map((style) => style.id),
+          fields,
+          textLayout: inferTextLayout(fields),
+          imageUrl: item.imageUrl || ''
+        };
+      });
+
+      save(normalized);
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -652,70 +796,98 @@
             el('th', null, __('ID', 'sign-selector')),
             el('th', null, __('Label', 'sign-selector')),
             el('th', null, __('Tier', 'sign-selector')),
-            el('th', null, __('Price ($)', 'sign-selector')),
+            el('th', null, __('Shape', 'sign-selector')),
+            el('th', null, __('Template Options', 'sign-selector')),
             el('th', null, __('Enabled', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
         ),
         el('tbody', null,
           items.map((item, i) =>
-            el(Fragment, { key: i },
-              el('tr', null,
-                el('td', null,
-                  el('div', { className: 'ss-img-cell' },
-                    item.imageUrl ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label }) : null,
-                    el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-                  )
-                ),
-                el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
-                el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
-                el('td', null,
-                  el('select', { className: 'ss-input ss-input-sm', value: item.tier || 'Standard', onChange: (e) => updateField(i, 'tier', e.target.value) },
-                    el('option', { value: 'Deluxe' }, 'Deluxe'),
-                    el('option', { value: 'Standard' }, 'Standard')
-                  )
-                ),
-                el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.price ?? 0, onChange: (e) => updateField(i, 'price', e.target.value) })),
-                el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
-                el('td', null, el('div', { className: 'ss-actions' },
-                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => setExpandedRow(expandedRow === i ? null : i) }, expandedRow === i ? __('Hide Shapes', 'sign-selector') : __('Shape Images', 'sign-selector')),
-                  el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
-                ))
-              ),
-              expandedRow === i && el('tr', null,
-                el('td', { colSpan: 7 },
-                  el('div', { className: 'ss-shape-images-section' },
-                    el('h4', null, __('Shape-specific image overrides for: ', 'sign-selector') + item.label),
-                    el('div', { className: 'ss-shape-images-grid' },
-                      shapeIds.map(shapeId =>
-                        el('div', { className: 'ss-shape-img-item', key: shapeId },
-                          el('label', null, shapeId),
-                          item.images && item.images[shapeId]
-                            ? el('img', { className: 'ss-img-preview', src: item.images[shapeId], alt: shapeId })
-                            : null,
-                          el('div', { className: 'ss-img-cell' },
-                            el('input', {
-                              className: 'ss-input',
-                              value: (item.images && item.images[shapeId]) || '',
-                              onChange: (e) => updateShapeImage(i, shapeId, e.target.value),
-                              placeholder: __('Image URL', 'sign-selector')
-                            }),
-                            el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(i, shapeId, url)) }, __('Browse', 'sign-selector'))
-                          )
-                        )
-                      )
-                    )
-                  )
+            el('tr', { key: i },
+              el('td', null,
+                el('div', { className: 'ss-img-cell' },
+                  item.imageUrl ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label }) : null,
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(i, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
                 )
-              )
+              ),
+              el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
+              el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
+              el('td', null,
+                el('select', { className: 'ss-input ss-input-sm', value: item.tier || 'Standard', onChange: (e) => updateField(i, 'tier', e.target.value) },
+                  el('option', { value: 'Deluxe' }, 'Deluxe'),
+                  el('option', { value: 'Standard' }, 'Standard')
+                )
+              ),
+              el('td', null,
+                el('select', { className: 'ss-input ss-input-sm', value: item.shapeId || 'all', onChange: (e) => updateField(i, 'shapeId', e.target.value) },
+                  shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+                )
+              ),
+              el('td', null,
+                el('div', { className: 'ss-template-config-summary' },
+                  el('div', { className: 'ss-template-config-line' },
+                    el('strong', null, __('Styles:', 'sign-selector') + ' '),
+                    el('span', null, getStyleSummary(item))
+                  ),
+                  el('div', { className: 'ss-template-config-line' },
+                    el('strong', null, __('Fields:', 'sign-selector') + ' '),
+                    el('span', null, getFieldSummary(item))
+                  ),
+                  el('button', {
+                    type: 'button',
+                    className: 'ss-btn ss-btn-sm',
+                    onClick: () => openTemplateOptions(i)
+                  }, __('Configure', 'sign-selector'))
+                )
+              ),
+              el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
+              el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
             )
           )
         )
       ),
       el('div', { className: 'ss-save-bar' },
-        el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Templates', 'sign-selector'))
+        el('button', { className: 'ss-btn ss-btn-primary', onClick: saveTemplates }, __('Save Templates', 'sign-selector'))
       ),
       el(Toast, toast),
+      editingTemplateIndex !== null && items[editingTemplateIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeTemplateOptions },
+        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
+          el('h3', { className: 'ss-template-options-title' }, __('Template Options', 'sign-selector')),
+          el('p', { className: 'ss-template-options-subtitle' }, items[editingTemplateIndex].label || items[editingTemplateIndex].id || __('Template', 'sign-selector')),
+          el('div', { className: 'ss-template-options-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Sign Styles', 'sign-selector')),
+              signStyleOptions.map((style) =>
+                el('label', { key: style.id, className: 'ss-template-option-check' },
+                  el('input', {
+                    type: 'checkbox',
+                    checked: getAssignedSignStyleIds(items[editingTemplateIndex]).includes(style.id),
+                    onChange: (e) => toggleSignStyle(editingTemplateIndex, style.id, e.target.checked)
+                  }),
+                  style.label
+                )
+              )
+            ),
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Text Fields', 'sign-selector')),
+              templateFieldOptions.map((field) =>
+                el('label', { key: field.id, className: 'ss-template-option-check' },
+                  el('input', {
+                    type: 'checkbox',
+                    checked: getTemplateFields(items[editingTemplateIndex]).includes(field.id),
+                    onChange: (e) => toggleTemplateField(editingTemplateIndex, field.id, e.target.checked)
+                  }),
+                  field.label
+                )
+              )
+            )
+          ),
+          el('div', { className: 'ss-modal-actions' },
+            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeTemplateOptions }, __('Done', 'sign-selector'))
+          )
+        )
+      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -732,13 +904,16 @@
 
     const updateField = (index, field, value) => {
       const next = [...items];
-      const parsed = field === 'price' ? Number(value) || 0 : value;
-      next[index] = { ...next[index], [field]: parsed };
+      next[index] = { ...next[index], [field]: value };
       setItems(next);
     };
 
     const addItem = () => {
       setItems([...items, { id: uid(), label: '', hex: '#ffffff', price: 0, image: '', imageUrl: '', enabled: true }]);
+    };
+
+    const savePaintColors = () => {
+      save(items.map((item) => ({ ...item, price: 0 })));
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
@@ -756,7 +931,6 @@
             el('th', null, __('ID', 'sign-selector')),
             el('th', null, __('Label', 'sign-selector')),
             el('th', null, __('Hex', 'sign-selector')),
-            el('th', null, __('Price ($)', 'sign-selector')),
             el('th', null, __('Enabled', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
@@ -774,7 +948,6 @@
               el('td', null, el('input', { className: 'ss-input ss-input-sm', value: item.id || '', onChange: (e) => updateField(i, 'id', e.target.value) })),
               el('td', null, el('input', { className: 'ss-input', value: item.label || '', onChange: (e) => updateField(i, 'label', e.target.value) })),
               el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'color', value: item.hex || '#ffffff', onChange: (e) => updateField(i, 'hex', e.target.value) })),
-              el('td', null, el('input', { className: 'ss-input ss-input-sm', type: 'number', step: '0.01', value: item.price ?? 0, onChange: (e) => updateField(i, 'price', e.target.value) })),
               el('td', null, el(Toggle, { checked: item.enabled !== false, onChange: (v) => updateField(i, 'enabled', v) })),
               el('td', null, el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector')))
             )
@@ -782,7 +955,7 @@
         )
       ),
       el('div', { className: 'ss-save-bar' },
-        el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Paint Colors', 'sign-selector'))
+        el('button', { className: 'ss-btn ss-btn-primary', onClick: savePaintColors }, __('Save Paint Colors', 'sign-selector'))
       ),
       el(Toast, toast),
       pendingIndex !== null && el(ConfirmModal, {
