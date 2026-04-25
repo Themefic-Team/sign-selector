@@ -443,9 +443,15 @@
 
   const SurfacesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/surfaces');
+    const { items: signStyles, loading: signStylesLoading } = useCollection('/sign-selector/v1/sign-styles');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
     const [editingIndex, setEditingIndex] = useState(null);
     const [isAddingSurface, setIsAddingSurface] = useState(false);
+
+    const signStyleOptions = signStyles.map((style) => ({
+      id: style.id,
+      label: style.label || style.id
+    }));
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -453,8 +459,52 @@
       setItems(next);
     };
 
+    const getAssignedSignStyleIds = (item) => {
+      if (Array.isArray(item.signStyleIds)) {
+        return item.signStyleIds;
+      }
+
+      return signStyleOptions.map((style) => style.id);
+    };
+
+    const toggleSignStyle = (index, styleId, checked) => {
+      const next = [...items];
+      const currentIds = getAssignedSignStyleIds(next[index]);
+      const newIds = checked
+        ? Array.from(new Set([...currentIds, styleId]))
+        : currentIds.filter((id) => id !== styleId);
+
+      next[index] = { ...next[index], signStyleIds: newIds };
+      setItems(next);
+    };
+
+    const getStyleSummary = (item) => {
+      const assignedIds = getAssignedSignStyleIds(item);
+
+      if (!signStyleOptions.length || assignedIds.length === signStyleOptions.length) {
+        return __('All sign styles selected', 'sign-selector');
+      }
+
+      if (!assignedIds.length) {
+        return __('No sign styles selected', 'sign-selector');
+      }
+
+      const labels = assignedIds
+        .map((id) => signStyleOptions.find((style) => style.id === id)?.label || id)
+        .filter(Boolean);
+
+      return labels.join(', ');
+    };
+
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', image: '', imageUrl: '', enabled: true }];
+      const nextItems = [...items, {
+        id: uid(),
+        label: '',
+        image: '',
+        imageUrl: '',
+        signStyleIds: signStyleOptions.map((style) => style.id),
+        enabled: true
+      }];
       setItems(nextItems);
       setIsAddingSurface(true);
       setEditingIndex(nextItems.length - 1);
@@ -470,7 +520,18 @@
       setIsAddingSurface(false);
     };
 
-    if (loading) return el('p', null, __('Loading…', 'sign-selector'));
+    const saveSurfaces = () => {
+      const normalized = items.map((item) => ({
+        ...item,
+        signStyleIds: Array.isArray(item.signStyleIds)
+          ? item.signStyleIds
+          : signStyleOptions.map((style) => style.id)
+      }));
+
+      save(normalized);
+    };
+
+    if (loading || signStylesLoading) return el('p', null, __('Loading…', 'sign-selector'));
 
     return el(Fragment, null,
       el('div', { className: 'ss-toolbar' },
@@ -482,6 +543,7 @@
           el('tr', null,
             el('th', null, __('Preview', 'sign-selector')),
             el('th', null, __('Surface', 'sign-selector')),
+            el('th', null, __('Sign Styles', 'sign-selector')),
             el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
@@ -501,6 +563,9 @@
                 )
               ),
               el('td', null,
+                el('span', null, getStyleSummary(item))
+              ),
+              el('td', null,
                 el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
               ),
               el('td', null,
@@ -514,25 +579,40 @@
         )
       ),
       el('div', { className: 'ss-save-bar' },
-        el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Surfaces', 'sign-selector'))
+        el('button', { className: 'ss-btn ss-btn-primary', onClick: saveSurfaces }, __('Save Surfaces', 'sign-selector'))
       ),
       el(Toast, toast),
       editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
           el('h3', { className: 'ss-template-options-title' }, isAddingSurface ? __('Add Surface', 'sign-selector') : __('Edit Surface', 'sign-selector')),
-          el('div', { className: 'ss-template-options-section' },
-            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
-            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
-            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
-            el('div', { className: 'ss-img-cell' },
-              el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
-              el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+          el('div', { className: 'ss-template-form-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
+              el('div', { className: 'ss-img-cell' },
+                el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
+                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
+              ),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              )
             ),
-            el('div', { className: 'ss-template-enabled-row' },
-              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
-              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Sign Styles', 'sign-selector')),
+              signStyleOptions.map((style) =>
+                el('label', { key: style.id, className: 'ss-template-option-check' },
+                  el('input', {
+                    type: 'checkbox',
+                    checked: getAssignedSignStyleIds(items[editingIndex]).includes(style.id),
+                    onChange: (e) => toggleSignStyle(editingIndex, style.id, e.target.checked)
+                  }),
+                  style.label
+                )
+              )
             )
           ),
           el('div', { className: 'ss-modal-actions' },
@@ -552,9 +632,15 @@
 
   const ShapesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/shapes');
+    const { items: signStyles, loading: signStylesLoading } = useCollection('/sign-selector/v1/sign-styles');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
     const [editingIndex, setEditingIndex] = useState(null);
     const [isAddingShape, setIsAddingShape] = useState(false);
+
+    const signStyleOptions = signStyles.map((style) => ({
+      id: style.id,
+      label: style.label || style.id
+    }));
 
     const updateField = (index, field, value) => {
       const next = [...items];
@@ -563,8 +649,53 @@
       setItems(next);
     };
 
+    const getAssignedSignStyleIds = (item) => {
+      if (Array.isArray(item.signStyleIds)) {
+        return item.signStyleIds;
+      }
+
+      return signStyleOptions.map((style) => style.id);
+    };
+
+    const toggleSignStyle = (index, styleId, checked) => {
+      const next = [...items];
+      const currentIds = getAssignedSignStyleIds(next[index]);
+      const newIds = checked
+        ? Array.from(new Set([...currentIds, styleId]))
+        : currentIds.filter((id) => id !== styleId);
+
+      next[index] = { ...next[index], signStyleIds: newIds };
+      setItems(next);
+    };
+
+    const getStyleSummary = (item) => {
+      const assignedIds = getAssignedSignStyleIds(item);
+
+      if (!signStyleOptions.length || assignedIds.length === signStyleOptions.length) {
+        return __('All sign styles selected', 'sign-selector');
+      }
+
+      if (!assignedIds.length) {
+        return __('No sign styles selected', 'sign-selector');
+      }
+
+      const labels = assignedIds
+        .map((id) => signStyleOptions.find((style) => style.id === id)?.label || id)
+        .filter(Boolean);
+
+      return labels.join(', ');
+    };
+
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', width: 10, height: 5, basePrice: 0, enabled: true }];
+      const nextItems = [...items, {
+        id: uid(),
+        label: '',
+        width: 10,
+        height: 5,
+        basePrice: 0,
+        signStyleIds: signStyleOptions.map((style) => style.id),
+        enabled: true
+      }];
       setItems(nextItems);
       setIsAddingShape(true);
       setEditingIndex(nextItems.length - 1);
@@ -580,7 +711,18 @@
       setIsAddingShape(false);
     };
 
-    if (loading) return el('p', null, __('Loading…', 'sign-selector'));
+    const saveShapes = () => {
+      const normalized = items.map((item) => ({
+        ...item,
+        signStyleIds: Array.isArray(item.signStyleIds)
+          ? item.signStyleIds
+          : signStyleOptions.map((style) => style.id)
+      }));
+
+      save(normalized);
+    };
+
+    if (loading || signStylesLoading) return el('p', null, __('Loading…', 'sign-selector'));
 
     return el(Fragment, null,
       el('div', { className: 'ss-toolbar' },
@@ -593,6 +735,7 @@
             el('th', null, __('Shape', 'sign-selector')),
             el('th', null, __('Dimensions', 'sign-selector')),
             el('th', null, __('Base Price', 'sign-selector')),
+            el('th', null, __('Sign Styles', 'sign-selector')),
             el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
@@ -609,6 +752,9 @@
               el('td', null, `${item.width ?? 0}" × ${item.height ?? 0}"`),
               el('td', null, `$${Number(item.basePrice ?? 0).toFixed(2)}`),
               el('td', null,
+                el('span', null, getStyleSummary(item))
+              ),
+              el('td', null,
                 el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
               ),
               el('td', null,
@@ -622,26 +768,41 @@
         )
       ),
       el('div', { className: 'ss-save-bar' },
-        el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Shapes', 'sign-selector'))
+        el('button', { className: 'ss-btn ss-btn-primary', onClick: saveShapes }, __('Save Shapes', 'sign-selector'))
       ),
       el(Toast, toast),
       editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
           el('h3', { className: 'ss-template-options-title' }, isAddingShape ? __('Add Shape', 'sign-selector') : __('Edit Shape', 'sign-selector')),
-          el('div', { className: 'ss-template-options-section' },
-            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
-            el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
-            el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Width', 'sign-selector')),
-            el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].width ?? 0, onChange: (e) => updateField(editingIndex, 'width', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Height', 'sign-selector')),
-            el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].height ?? 0, onChange: (e) => updateField(editingIndex, 'height', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Base Price ($)', 'sign-selector')),
-            el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].basePrice ?? 0, onChange: (e) => updateField(editingIndex, 'basePrice', e.target.value) }),
-            el('div', { className: 'ss-template-enabled-row' },
-              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
-              el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+          el('div', { className: 'ss-template-form-grid' },
+            el('div', { className: 'ss-template-options-section' },
+              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Width', 'sign-selector')),
+              el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].width ?? 0, onChange: (e) => updateField(editingIndex, 'width', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Height', 'sign-selector')),
+              el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].height ?? 0, onChange: (e) => updateField(editingIndex, 'height', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Base Price ($)', 'sign-selector')),
+              el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].basePrice ?? 0, onChange: (e) => updateField(editingIndex, 'basePrice', e.target.value) }),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              )
+            ),
+            el('div', { className: 'ss-template-options-section' },
+              el('h4', null, __('Sign Styles', 'sign-selector')),
+              signStyleOptions.map((style) =>
+                el('label', { key: style.id, className: 'ss-template-option-check' },
+                  el('input', {
+                    type: 'checkbox',
+                    checked: getAssignedSignStyleIds(items[editingIndex]).includes(style.id),
+                    onChange: (e) => toggleSignStyle(editingIndex, style.id, e.target.checked)
+                  }),
+                  style.label
+                )
+              )
             )
           ),
           el('div', { className: 'ss-modal-actions' },
@@ -814,7 +975,7 @@
   const DesignTemplatesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/design-templates');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
-    const [shapeOptions, setShapeOptions] = useState([{ id: 'all', label: __('All Shapes', 'sign-selector') }]);
+    const [shapeOptions, setShapeOptions] = useState([{ id: 'all', label: __('All Shapes', 'sign-selector') }, { id: 'none', label: __('No Shape', 'sign-selector') }]);
     const [signStyleOptions, setSignStyleOptions] = useState([]);
     const [editingTemplateIndex, setEditingTemplateIndex] = useState(null);
     const [isAddingTemplate, setIsAddingTemplate] = useState(false);
@@ -822,6 +983,8 @@
     const pageSize = 8;
 
     const templateFieldOptions = [
+      { id: 'firstLine', label: __('First Line of Text', 'sign-selector') },
+      { id: 'secondLine', label: __('Second Line of Text', 'sign-selector') },
       { id: 'topText', label: __('Top Text', 'sign-selector') },
       { id: 'houseNumber', label: __('House Number', 'sign-selector') },
       { id: 'bottomText', label: __('Bottom Text', 'sign-selector') }
@@ -833,7 +996,7 @@
           .filter((shape) => shape && shape.id)
           .map((shape) => ({ id: shape.id, label: shape.label || shape.id }));
 
-        setShapeOptions([{ id: 'all', label: __('All Shapes', 'sign-selector') }, ...options]);
+        setShapeOptions([{ id: 'all', label: __('All Shapes', 'sign-selector') }, { id: 'none', label: __('No Shape', 'sign-selector') }, ...options]);
       }).catch(() => {});
 
       apiFetch({ path: '/sign-selector/v1/sign-styles' }).then((data) => {
@@ -854,6 +1017,8 @@
     const normalizeTemplateFieldKey = (value) => {
       const normalized = String(value || '').trim().toLowerCase();
 
+      if (['first', 'firstline', 'first_line', 'line1', 'line_1'].includes(normalized)) return 'firstLine';
+      if (['second', 'secondline', 'second_line', 'line2', 'line_2'].includes(normalized)) return 'secondLine';
       if (['top', 'toptext', 'top_text', 'header', 'title'].includes(normalized)) return 'topText';
       if (['number', 'house', 'housenumber', 'house_number', 'address'].includes(normalized)) return 'houseNumber';
       if (['bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle'].includes(normalized)) return 'bottomText';
@@ -883,6 +1048,9 @@
     };
 
     const inferTextLayout = (fields) => {
+      if (fields.includes('firstLine') || fields.includes('secondLine')) {
+        return fields.includes('secondLine') ? 'two-lines' : 'one-line';
+      }
       if (fields.includes('topText')) return 'top-number-bottom';
       if (fields.includes('bottomText')) return 'number-bottom';
       if (fields.includes('houseNumber')) return 'number';

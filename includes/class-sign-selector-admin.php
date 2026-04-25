@@ -267,11 +267,76 @@ class Sign_Selector_Admin {
         return $templates;
     }
 
+    /**
+     * Build default installation surfaces from bundled image assets.
+     *
+     * @param string $surface_base_url Base URL to installation surface image root.
+        * @param string[] $all_sign_style_ids Available sign style ids.
+     * @return array<int, array<string, mixed>>
+     */
+        private function build_default_installation_surfaces( $surface_base_url, $all_sign_style_ids ) {
+        $surface_root = trailingslashit( SIGN_SELECTOR_PATH ) . 'assets/images/installation-surface/';
+        $files        = glob( $surface_root . '*' );
+        $surfaces     = array();
+        $index        = 1;
+
+        if ( ! is_array( $files ) || empty( $files ) ) {
+            return $surfaces;
+        }
+
+        $allowed_extensions = array( 'jpg', 'jpeg', 'png', 'webp' );
+        $image_files        = array();
+
+        foreach ( $files as $file_path ) {
+            if ( ! is_file( $file_path ) ) {
+                continue;
+            }
+
+            $extension = strtolower( (string) pathinfo( $file_path, PATHINFO_EXTENSION ) );
+
+            if ( ! in_array( $extension, $allowed_extensions, true ) ) {
+                continue;
+            }
+
+            $image_files[] = $file_path;
+        }
+
+        if ( empty( $image_files ) ) {
+            return $surfaces;
+        }
+
+        natsort( $image_files );
+
+        foreach ( $image_files as $file_path ) {
+            $filename = basename( $file_path );
+            $id       = sanitize_title( (string) pathinfo( $filename, PATHINFO_FILENAME ) );
+            // file name without extension may be non-unique or empty after sanitization – fallback to generated id. 
+            $file_label = ucwords( str_replace( array( '-', '_' ), ' ', pathinfo( $filename, PATHINFO_FILENAME ) ) );
+
+            if ( '' === $id ) {
+                $id = sprintf( 'surface-%02d', $index );
+            }
+
+            $surfaces[] = array(
+                'id'       => $id,
+                'label'    => $file_label,
+                'image'    => $filename,
+                'imageUrl' => $surface_base_url . rawurlencode( $filename ),
+                'signStyleIds' => $all_sign_style_ids,
+                'enabled'  => true,
+            );
+
+            $index++;
+        }
+
+        return $surfaces;
+    }
+
     /* ─── Seed defaults on first activation ─────────────────── */
 
     public function maybe_seed_defaults() {
         // Re-seed when the data version changes.
-        $current_version = '11';
+        $current_version = '16';
         if ( get_option( 'sign_selector_seeded' ) === $current_version ) {
             return;
         }
@@ -311,26 +376,14 @@ class Sign_Selector_Admin {
             return isset( $style['id'] ) ? $style['id'] : '';
         }, $sign_styles ) );
 
-        // Installation Surfaces (25 pre-built)
-        $surfaces = array();
-        for ( $i = 1; $i <= 25; $i++ ) {
-            $padded   = str_pad( (string) $i, 2, '0', STR_PAD_LEFT );
-            $filename = "{$i}-skew-fixed.jpg";
-            $surfaces[] = array(
-                'id'       => "surface-{$padded}",
-                'label'    => "Surface {$i}",
-                'image'    => $filename,
-                'imageUrl' => $surface_base . $filename,
-                'enabled'  => true,
-            );
-        }
+        $surfaces = $this->build_default_installation_surfaces( $surface_base, $all_sign_style_ids );
 
         // Shapes
         $shapes = array(
-            array( 'id' => 'rectangle', 'label' => '13" x 10"',  'width' => 13, 'height' => 10,  'basePrice' => 150, 'enabled' => true ),
-            array( 'id' => 'oval',      'label' => '13" x 9"',  'width' => 13, 'height' => 9,  'basePrice' => 129, 'enabled' => true ),
-            array( 'id' => 'round',     'label' => '9" x 13"',  'width' => 9,  'height' => 13, 'basePrice' => 175, 'enabled' => true ),
-            array( 'id' => 'arch',      'label' => '24" x 12"', 'width' => 24, 'height' => 12, 'basePrice' => 240, 'enabled' => true ),
+            array( 'id' => 'rectangle', 'label' => '13" x 10"',  'width' => 13, 'height' => 10,  'basePrice' => 150, 'signStyleIds' => $all_sign_style_ids, 'enabled' => true ),
+            array( 'id' => 'oval',      'label' => '13" x 9"',   'width' => 13, 'height' => 9,   'basePrice' => 129, 'signStyleIds' => $all_sign_style_ids, 'enabled' => true ),
+            array( 'id' => 'round',     'label' => '9" x 13"',   'width' => 9,  'height' => 13,  'basePrice' => 175, 'signStyleIds' => $all_sign_style_ids, 'enabled' => true ),
+            array( 'id' => 'arch',      'label' => '24" x 12"',  'width' => 24, 'height' => 12,  'basePrice' => 240, 'signStyleIds' => $all_sign_style_ids, 'enabled' => true ),
         );
 
         // Slate Colors – with shape-specific image overrides
@@ -470,16 +523,27 @@ class Sign_Selector_Admin {
             return array();
         }
 
+        $valid_fields = array( 'firstLine', 'secondLine', 'topText', 'houseNumber', 'bottomText' );
+
         if ( ! isset( $item['fields'] ) || ! is_array( $item['fields'] ) ) {
             $item['fields'] = array( 'houseNumber', 'bottomText' );
         } else {
-            $item['fields'] = array_values( $item['fields'] );
+            $item['fields'] = array_values( array_intersect( $item['fields'], $valid_fields ) );
+            if ( empty( $item['fields'] ) ) {
+                $item['fields'] = array( 'houseNumber', 'bottomText' );
+            }
         }
 
         if ( empty( $item['textLayout'] ) || ! is_string( $item['textLayout'] ) ) {
-            $item['textLayout'] = in_array( 'topText', $item['fields'], true )
-                ? 'top-number-bottom'
-                : ( in_array( 'bottomText', $item['fields'], true ) ? 'number-bottom' : 'number' );
+            if ( in_array( 'firstLine', $item['fields'], true ) || in_array( 'secondLine', $item['fields'], true ) ) {
+                $item['textLayout'] = in_array( 'secondLine', $item['fields'], true ) ? 'two-lines' : 'one-line';
+            } elseif ( in_array( 'topText', $item['fields'], true ) ) {
+                $item['textLayout'] = 'top-number-bottom';
+            } elseif ( in_array( 'bottomText', $item['fields'], true ) ) {
+                $item['textLayout'] = 'number-bottom';
+            } else {
+                $item['textLayout'] = 'number';
+            }
         }
 
         return $item;

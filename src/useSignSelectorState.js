@@ -22,13 +22,20 @@ const normalizeStyleId = (val) => (typeof val === 'string' ? val.trim().toLowerC
 
 const stepDefinitions      = toArray(cfg.steps)
 const signStyles           = toArray(cfg.signStyles)
-const shapes               = toArray(cfg.shapes).map(s => ({ ...s, basePrice: Number(s.basePrice) || 0, width: Number(s.width) || 0, height: Number(s.height) || 0 }))
+const allShapes            = toArray(cfg.shapes).map(s => ({
+  ...s,
+  basePrice: Number(s.basePrice) || 0,
+  width: Number(s.width) || 0,
+  height: Number(s.height) || 0,
+  signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
+}))
 const addOns               = toArray(cfg.addons).map(a => ({ ...a, price: Number(a.price) || 0 }))
 const mountingHardware     = toArray(cfg.mountingHardware).map(h => ({ ...h, price: Number(h.price) || 0 }))
 
-const installationSurfaces = toArray(cfg.surfaces).map(s => ({
+const allInstallationSurfaces = toArray(cfg.surfaces).map(s => ({
   ...s,
-  imageUrl: s.imageUrl || ''
+  imageUrl: s.imageUrl || '',
+  signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
 
 const slateColors = toArray(cfg.slateColors).map(item => ({
@@ -74,6 +81,7 @@ const initialConfiguration =
     : {}
 
 const resolveInitialId = (arr, candidate, fallbackId) => {
+  
   if (candidate && arr.some((item) => item.id === candidate)) {
     return candidate
   }
@@ -81,13 +89,16 @@ const resolveInitialId = (arr, candidate, fallbackId) => {
   return fallbackId
 }
 
-const getTemplatesForSelection = (shapeId, signStyleId) => {
+const getTemplatesForSelection = (shapeId, signStyleId, ignoreShape = false) => {
   const normalizedShapeId = normalizeShapeId(shapeId)
   const normalizedStyleId = normalizeStyleId(signStyleId)
 
   return designTemplates.filter((item) => {
-    const itemShapeId = normalizeShapeId(item.shapeId) || 'all'
-    const shapeMatches = itemShapeId === 'all' || itemShapeId === normalizedShapeId
+    if (!ignoreShape) {
+      const itemShapeId = normalizeShapeId(item.shapeId) || 'all'
+      const shapeMatches = itemShapeId === 'all' || itemShapeId === 'none' || itemShapeId === normalizedShapeId
+      if (!shapeMatches) return false
+    }
 
     const assignedStyleIds = Array.isArray(item.signStyleIds)
       ? item.signStyleIds.map(normalizeStyleId).filter(Boolean)
@@ -96,25 +107,61 @@ const getTemplatesForSelection = (shapeId, signStyleId) => {
       ? true
       : assignedStyleIds.includes(normalizedStyleId)
 
-    return shapeMatches && styleMatches
+    return styleMatches
+  })
+}
+
+const getShapesForSignStyle = (signStyleId) => {
+  const normalizedStyleId = normalizeStyleId(signStyleId)
+
+  return allShapes.filter((item) => {
+    const assignedStyleIds = Array.isArray(item.signStyleIds)
+      ? item.signStyleIds.map(normalizeStyleId).filter(Boolean)
+      : null
+    const styleMatches = !Array.isArray(assignedStyleIds)
+      ? true
+      : assignedStyleIds.includes(normalizedStyleId)
+
+    return styleMatches
+  })
+}
+
+const getSurfacesForSignStyle = (signStyleId) => {
+  const normalizedStyleId = normalizeStyleId(signStyleId)
+
+  return allInstallationSurfaces.filter((item) => {
+    const assignedStyleIds = Array.isArray(item.signStyleIds)
+      ? item.signStyleIds.map(normalizeStyleId).filter(Boolean)
+      : null
+    const styleMatches = !Array.isArray(assignedStyleIds)
+      ? true
+      : assignedStyleIds.includes(normalizedStyleId)
+
+    return styleMatches
   })
 }
 
 export const useSignSelectorState = () => {
-  const initialShapeId = resolveInitialId(shapes, initialConfiguration?.sign?.shape?.id, shapes[0]?.id || '')
   const initialSignStyleId = resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || '')
+  const initialShapes = getShapesForSignStyle(initialSignStyleId)
+  const initialShapeId = resolveInitialId(initialShapes, initialConfiguration?.sign?.shape?.id, initialShapes[0]?.id || '')
+  const initialSurfaces = getSurfacesForSignStyle(initialSignStyleId)
   const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId)
 
   const state = reactive({
     currentStep: 1,
-    signStyleId: initialSignStyleId,
-    surfaceId: resolveInitialId(installationSurfaces, initialConfiguration?.sign?.surface?.id, installationSurfaces[0]?.id || ''),
-    shapeId: initialShapeId,
-    slateColorId: resolveInitialId(slateColors, initialConfiguration?.sign?.slateColor?.id, slateColors[0]?.id || ''),
-    templateId: resolveInitialId(initialTemplates, initialConfiguration?.sign?.template?.id, initialTemplates[0]?.id || ''),
-    paintColorId: resolveInitialId(paintColors, initialConfiguration?.sign?.paintColor?.id, paintColors[0]?.id || ''),
-    addOnId: resolveInitialId(addOns, initialConfiguration?.sign?.addOn?.id, addOns[0]?.id || ''),
-    hardwareId: resolveInitialId(mountingHardware, initialConfiguration?.sign?.hardware?.id, mountingHardware[0]?.id || ''),
+    signStyleId: initialConfiguration?.sign?.style?.id || '',
+    surfaceId: initialConfiguration?.sign?.surface?.id || '',
+    shapeId: initialConfiguration?.sign?.shape?.id || '',
+    slateColorId: initialConfiguration?.sign?.slateColor?.id || '',
+    templateId: initialConfiguration?.sign?.template?.id || '',
+    paintColorId: initialConfiguration?.sign?.paintColor?.id || '',
+    addOnIds: Array.isArray(initialConfiguration?.sign?.addOns)
+      ? initialConfiguration.sign.addOns.map(a => a.id).filter(Boolean)
+      : [],
+    hardwareId: initialConfiguration?.sign?.hardware?.id || '',
+    firstLine: initialConfiguration?.checkout?.firstLine || '',
+    secondLine: initialConfiguration?.checkout?.secondLine || '',
     topText: initialConfiguration?.checkout?.topText || '',
     houseNumber: initialConfiguration?.checkout?.houseNumber || '',
     bottomText: initialConfiguration?.checkout?.bottomText || '',
@@ -123,15 +170,20 @@ export const useSignSelectorState = () => {
     message: ''
   })
 
-  const selectedSignStyle = computed(() => safeFind(signStyles, state.signStyleId))
-  const selectedSurface = computed(() => safeFind(installationSurfaces, state.surfaceId))
-  const selectedShape = computed(() => safeFind(shapes, state.shapeId))
-  const selectedSlateColor = computed(() => safeFind(slateColors, state.slateColorId))
-  const availableDesignTemplates = computed(() => getTemplatesForSelection(state.shapeId, state.signStyleId))
-  const selectedTemplate = computed(() => safeFind(availableDesignTemplates.value, state.templateId) || { id: '', label: '', price: 0, imageUrl: '' })
-  const selectedPaintColor = computed(() => safeFind(paintColors, state.paintColorId))
-  const selectedAddOn = computed(() => safeFind(addOns, state.addOnId))
-  const selectedHardware = computed(() => safeFind(mountingHardware, state.hardwareId))
+  const selectedSignStyle = computed(() => state.signStyleId ? (signStyles.find(i => i.id === state.signStyleId) || null) : null)
+  const shapes = computed(() => getShapesForSignStyle(state.signStyleId))
+  const installationSurfaces = computed(() => getSurfacesForSignStyle(state.signStyleId))
+  const selectedSurface = computed(() => state.surfaceId ? (installationSurfaces.value.find(i => i.id === state.surfaceId) || {}) : {})
+  const selectedShape = computed(() => state.shapeId ? (shapes.value.find(i => i.id === state.shapeId) || {}) : {})
+  const selectedSlateColor = computed(() => state.slateColorId ? (slateColors.find(i => i.id === state.slateColorId) || { price: 0, images: {}, imageUrl: '', hex: '' }) : { price: 0, images: {}, imageUrl: '', hex: '' })
+  const availableDesignTemplates = computed(() => {
+    const ignoreShape = !activeFlow.value.includes('size-shape')
+    return getTemplatesForSelection(state.shapeId, state.signStyleId, ignoreShape)
+  })
+  const selectedTemplate = computed(() => state.templateId ? (availableDesignTemplates.value.find(i => i.id === state.templateId) || { id: '', label: '', price: 0, imageUrl: '' }) : { id: '', label: '', price: 0, imageUrl: '' })
+  const selectedPaintColor = computed(() => state.paintColorId ? (paintColors.find(i => i.id === state.paintColorId) || { price: 0, imageUrl: '', hex: '' }) : { price: 0, imageUrl: '', hex: '' })
+  const selectedAddOns = computed(() => addOns.filter(a => state.addOnIds.includes(a.id)))
+  const selectedHardware = computed(() => state.hardwareId ? (mountingHardware.find(i => i.id === state.hardwareId) || { price: 0 }) : { price: 0 })
 
   /* ─── Per-product flow ─────────────────────────────────────────────── */
 
@@ -160,10 +212,11 @@ export const useSignSelectorState = () => {
   }
 
   const totalPrice = computed(() => {
+    const addOnsTotal = selectedAddOns.value.reduce((sum, a) => sum + (a.price || 0), 0)
     return (
       (selectedShape.value?.basePrice || 0) +
       (selectedSlateColor.value?.price || 0) +
-      (selectedAddOn.value?.price || 0) +
+      addOnsTotal +
       (selectedHardware.value?.price || 0)
     )
   })
@@ -213,7 +266,7 @@ export const useSignSelectorState = () => {
       slateColor: selectedSlateColor.value,
       template: selectedTemplate.value,
       paintColor: selectedPaintColor.value,
-      addOn: selectedAddOn.value,
+      addOns: selectedAddOns.value,
       hardware: selectedHardware.value
     },
     pricing: {
@@ -221,12 +274,14 @@ export const useSignSelectorState = () => {
       slate: selectedSlateColor.value.price,
       template: 0,
       paint: 0,
-      addOn: selectedAddOn.value.price,
+      addOns: selectedAddOns.value.reduce((sum, a) => sum + (a.price || 0), 0),
       hardware: selectedHardware.value.price,
       total: totalPrice.value
     },
     checkout: {
       step: state.currentStep,
+      firstLine: state.firstLine,
+      secondLine: state.secondLine,
       topText: state.topText,
       houseNumber: state.houseNumber,
       bottomText: state.bottomText,
@@ -252,17 +307,39 @@ export const useSignSelectorState = () => {
   const prevStep = () => setStep(state.currentStep - 1)
 
   watch([() => state.shapeId, () => state.signStyleId], () => {
-    const matchingTemplates = availableDesignTemplates.value
+    if (!state.signStyleId) return
+    const ignoreShape = !activeFlow.value.includes('size-shape')
+    const matchingTemplates = getTemplatesForSelection(state.shapeId, state.signStyleId, ignoreShape)
 
-    if (!matchingTemplates.length) {
+    // Only clear templateId if the current one is no longer valid — never auto-select
+    if (state.templateId && !matchingTemplates.some((item) => item.id === state.templateId)) {
       state.templateId = ''
+    }
+  })
+
+  watch(() => state.signStyleId, () => {
+    if (!state.signStyleId) return
+    const matchingShapes = shapes.value
+
+    // Only clear shapeId if it is no longer valid — never auto-select
+    if (state.shapeId && !matchingShapes.some((item) => item.id === state.shapeId)) {
+      state.shapeId = ''
+    }
+  })
+
+  watch(() => state.signStyleId, () => {
+    if (!state.signStyleId) return
+    const matchingSurfaces = installationSurfaces.value
+
+    if (!matchingSurfaces.length) {
+      state.surfaceId = ''
       return
     }
 
-    if (!matchingTemplates.some((item) => item.id === state.templateId)) {
-      state.templateId = matchingTemplates[0].id
+    if (!matchingSurfaces.some((item) => item.id === state.surfaceId)) {
+      state.surfaceId = matchingSurfaces[0].id
     }
-  }, { immediate: true })
+  })
 
   // When the user switches sign style the flow may have fewer steps;
   // clamp currentStep so it never exceeds the new total.
@@ -345,7 +422,7 @@ export const useSignSelectorState = () => {
     selectedSlateColor,
     selectedTemplate,
     selectedPaintColor,
-    selectedAddOn,
+    selectedAddOns,
     selectedHardware,
     totalPrice,
     preview,

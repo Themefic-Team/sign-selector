@@ -66,11 +66,20 @@ class SignSelector {
     }
 
     public function register_assets() {
+        // Always register select2 (depends on jQuery, loads in footer)
+        wp_register_script(
+            'sign-selector-select2',
+            SIGN_SELECTOR_URL . 'assets/select2.min.js',
+            array( 'jquery' ),
+            '4.1.0',
+            true
+        );
+
         if ( $this->should_use_dev_server() ) {
             $vite_server = $this->get_vite_server_url();
 
             wp_register_script( 'sign-selector-vite-client', $vite_server . '/@vite/client', array(), SIGN_SELECTOR_VERSION, true );
-            wp_register_script( 'tf-core-sign-selector', $vite_server . '/src/main.js', array( 'sign-selector-vite-client' ), SIGN_SELECTOR_VERSION, true );
+            wp_register_script( 'tf-core-sign-selector', $vite_server . '/src/main.js', array( 'sign-selector-vite-client', 'sign-selector-select2' ), SIGN_SELECTOR_VERSION, true );
 
             return;
         }
@@ -84,7 +93,7 @@ class SignSelector {
         wp_register_script(
             'tf-core-sign-selector',
             SIGN_SELECTOR_URL . 'build/' . ltrim( $entry['file'], '/' ),
-            array(),
+            array( 'sign-selector-select2' ),
             SIGN_SELECTOR_VERSION,
             true
         );
