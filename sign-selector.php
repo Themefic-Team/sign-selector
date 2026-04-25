@@ -1,8 +1,7 @@
 <?php
 /**
  * Plugin Name:  Sign Selector 
- * Description:  A simple plugin to select and display a sign on your WordPress site.
- * Version: 1.0
+ * Description:  A simple plugin to select and display a sign on your WordPress site. 
  * Version: 1.0.2
  * Tested up to: 6.9
  * Author: Themefic
