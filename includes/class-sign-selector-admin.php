@@ -42,7 +42,7 @@ class Sign_Selector_Admin {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
-        add_action( 'admin_init', array( $this, 'maybe_seed_defaults' ) );
+        // add_action( 'admin_init', array( $this, 'maybe_seed_defaults' ) );
     }
 
     /* ─── Admin menu ────────────────────────────────────────── */
@@ -117,6 +117,8 @@ class Sign_Selector_Admin {
             register_rest_route( self::REST_NS, '/' . $route, array(
                 'methods'             => 'GET',
                 'callback'            => function () use ( $option_key ) {
+                    // Bypass any persistent object cache so live-server reads are always fresh.
+                    wp_cache_delete( $option_key, 'options' );
                     return rest_ensure_response( $this->get_option_items( $option_key ) );
                 },
                 'permission_callback' => function () {
@@ -133,7 +135,24 @@ class Sign_Selector_Admin {
                         return new WP_Error( 'invalid_data', 'Expected a JSON array.', array( 'status' => 400 ) );
                     }
                     $sanitized = $this->sanitize_items( $items );
-                    update_option( $option_key, wp_json_encode( $sanitized ), false );
+                    $encoded   = wp_json_encode( $sanitized );
+
+                    update_option( $option_key, $encoded, false );
+
+                    // Flush any persistent object cache entry so the next GET
+                    // reads the value we just wrote, not a stale cached copy.
+                    wp_cache_delete( $option_key, 'options' );
+
+                    // Verify the write actually landed in the database.
+                    $stored = get_option( $option_key );
+                    if ( $stored !== $encoded ) {
+                        return new WP_Error(
+                            'save_failed',
+                            'Data could not be persisted to the database.',
+                            array( 'status' => 500 )
+                        );
+                    }
+
                     return rest_ensure_response( $sanitized );
                 },
                 'permission_callback' => function () {
@@ -336,6 +355,7 @@ class Sign_Selector_Admin {
 
     public function maybe_seed_defaults() {
         // Re-seed when the data version changes.
+        return;
         $current_version = '16';
         if ( get_option( 'sign_selector_seeded' ) === $current_version ) {
             return;

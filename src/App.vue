@@ -615,7 +615,7 @@ const onSubmit = async () => {
                 <circle cx="6" cy="6" r="6" fill="#05DF72"/>
               </svg>
             </div>
-            <span>Your Custom Sign 1</span>
+            <span>Your Custom Sign</span>
           </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
           
