@@ -52,13 +52,24 @@ const validateCurrentStep = () => {
   if (state.currentStep === 1 && !state.signStyleId) {
     return 'Please select a sign style to continue.'
   }
-  if (state.currentStep === 2) {
-    if (hasSection('size-shape') && !state.shapeId) return 'Please select a size & shape to continue.'
-    if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
-  }
-  if (state.currentStep === 3) {
-    if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
-    if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+  if (isNoShapeFlow.value) {
+    // Custom flow (no size & shape): Step 2 = surface + template, Step 3 = slate + paint
+    if (state.currentStep === 2) {
+      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
+    }
+    if (state.currentStep === 3) {
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+    }
+  } else {
+    if (state.currentStep === 2) {
+      if (hasSection('size-shape') && !state.shapeId) return 'Please select a size & shape to continue.'
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
+    }
+    if (state.currentStep === 3) {
+      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+    }
   }
   return ''
 }
@@ -107,6 +118,9 @@ const FIELD_META = {
 const availableTemplateTiers = computed(() => [...new Set(availableDesignTemplates.value.map(t => t.tier).filter(Boolean))])
 const tieredTemplates = computed(() => availableDesignTemplates.value.filter(t => t.tier === activeTier.value))
 const hasTiers = computed(() => availableTemplateTiers.value.length > 1)
+// True when size-shape is not in the active flow (e.g. "Something Custom")
+// In this case Design Template moves to Step 2 and Slate/Paint move to Step 3
+const isNoShapeFlow = computed(() => !hasSection('size-shape'))
 
 watch(availableTemplateTiers, (tiers) => {
   if (!tiers.length) {
@@ -124,6 +138,27 @@ const templateImageUrl = computed(() => {
   if (!tpl) return ''
   return tpl.imageUrl || ''
 })
+
+// Track natural dimensions of the template image for no-shape-flow preview
+const templateNaturalSize = ref({ width: 1, height: 1 })
+watch(templateImageUrl, (url) => {
+  if (!url) {
+    templateNaturalSize.value = { width: 1, height: 1 }
+    return
+  }
+  const img = new Image()
+  img.onload = () => {
+    templateNaturalSize.value = { width: img.naturalWidth || 1, height: img.naturalHeight || 1 }
+  }
+  img.src = url
+}, { immediate: true })
+
+const noShapePreviewStyle = computed(() => ({
+  ...preview.value.signStyle,
+  aspectRatio: `${templateNaturalSize.value.width} / ${templateNaturalSize.value.height}`,
+  width: 'min(100%, 280px)',
+  height: 'auto'
+}))
 
 const templateOverlayStyle = computed(() => {
   if (!templateImageUrl.value) return {}
@@ -383,8 +418,67 @@ const onSubmit = async () => {
             </div>
           </section>
 
+          <!-- Design Template — shown in Step 2 when size-shape is not in flow -->
+          <section v-if="isNoShapeFlow && hasSection('design-template')" class="panel">
+            <div class="design-template-header">
+              <h3 class="panel-title-with-info">
+              Select Design Template
+                <span class="info-dot" aria-hidden="true">i</span>
+              </h3>
+
+              <!-- Tier tabs -->
+              <div v-if="hasTiers" class="tier-tabs">
+                <button
+                  type="button"
+                  class="tier-tab"
+                  :class="{ active: activeTier === 'Deluxe' }"
+                  @click="activeTier = 'Deluxe'"
+                >Deluxe</button>
+                <button
+                  type="button"
+                  class="tier-tab"
+                  :class="{ active: activeTier === 'Standard' }"
+                  @click="activeTier = 'Standard'"
+                >Standard</button>
+              </div>
+            </div>
+
+            <p v-if="!availableDesignTemplates.length" class="template-empty">
+              No templates are available for the selected sign style.
+            </p>
+
+            <!-- Filtered templates by active tier -->
+            <div v-else-if="hasTiers" class="pill-grid template-grid">
+              <button
+                v-for="item in tieredTemplates"
+                :key="item.id"
+                type="button"
+                class="tile template-tile"
+                :class="{ selected: state.templateId === item.id }"
+                @click="state.templateId = item.id"
+              >
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
+                <span v-if="state.templateId === item.id" class="option-check" aria-hidden="true" />
+              </button>
+            </div>
+
+            <!-- Fallback: templates without tier grouping -->
+            <div v-else class="pill-grid template-grid">
+              <button
+                v-for="item in availableDesignTemplates"
+                :key="item.id"
+                type="button"
+                class="tile template-tile"
+                :class="{ selected: state.templateId === item.id }"
+                @click="state.templateId = item.id"
+              >
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
+              </button>
+            </div>
+          </section>
+
           <!-- Size & Shape (flow-dependent) -->
-          <section v-if="hasSection('size-shape')" class="panel size-panel">
+          <section v-if="!isNoShapeFlow && hasSection('size-shape')" class="panel size-panel">
             <h3 class="panel-title-with-info">
               Size & Shape
               <span class="info-dot" aria-hidden="true">i</span>
@@ -401,14 +495,14 @@ const onSubmit = async () => {
                 <span class="shape-preview" :class="item.id" :style="getShapeCardStyle(item)">
                   <span class="shape-dim">{{ item.label }}</span>
                 </span>
-                <small class="shape-price">${{ item.basePrice.toFixed(2) }}</small>
+                <small class="shape-price" v-if="item.basePrice != 0">${{ item.basePrice.toFixed(2) }}</small>
                 <span v-if="state.shapeId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
           </section>
 
-          <!-- Slate Color (flow-dependent) -->
-          <section v-if="hasSection('slate-color')" class="panel slate-panel">
+          <!-- Slate Color (flow-dependent, only shown in Step 2 for normal flow) -->
+          <section v-if="!isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel">
             <h3 class="panel-title-with-info">
               Slate Color
               <span class="info-dot" aria-hidden="true">i</span>
@@ -468,30 +562,23 @@ const onSubmit = async () => {
             <span>Your Custom Sign</span>
           </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
-       
-            <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <div
-                v-if="templateImageUrl"
-                class="preview-template-overlay"
-                :style="templateOverlayStyle"
-              />
-              <!-- <div class="preview-live-text">
-                <span
-                  v-for="field in reviewFields"
-                  :key="field.key"
-                  class="preview-line"
-                  :class="field.key"
-                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
-                >
-                  {{ getPreviewFieldValue(field.key) }}
-                </span>
-              </div> -->
-            </div>
+            <template v-if="isNoShapeFlow">
+              <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+              <span v-else class="preview-no-template">Select a template to preview</span>
+            </template>
+            <template v-else>
+              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+            </template>
           </div>
           <ul class="spec-list">
             <li><span>Type</span><strong>{{ selectedSignStyle.label }}</strong></li>
-            <li><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
-            <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
+            <li v-if="!isNoShapeFlow"><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
+            <li v-if="!isNoShapeFlow"><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
+            <li v-if="isNoShapeFlow"><span>Template</span><strong>{{ selectedTemplate?.label }}</strong></li>
             <li><span>Total</span><strong>${{ totalPrice.toFixed(2) }}</strong></li>
           </ul>
         </aside>
@@ -500,8 +587,8 @@ const onSubmit = async () => {
       <!-- ═══ Step 3: Design & Finish ═══ -->
       <div v-if="state.currentStep === 3" class="split-layout">
         <div class="panel-stack">
-          <!-- Design Template (flow-dependent) -->
-          <section v-if="hasSection('design-template')" class="panel">
+          <!-- Design Template (shown in Step 3 only for normal flow; moved to Step 2 when no size-shape) -->
+          <section v-if="!isNoShapeFlow && hasSection('design-template')" class="panel">
             <div class="design-template-header">
               <h3 class="panel-title-with-info">
               Select Design Template
@@ -555,7 +642,33 @@ const onSubmit = async () => {
                 @click="state.templateId = item.id"
               >
                 <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
-                <span>{{ item.label }}</span>
+                <!-- <span>{{ item.label }}</span> -->
+              </button>
+            </div>
+          </section>
+
+          <!-- Slate Color (moved to Step 3 when no size-shape flow) -->
+          <section v-if="isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel">
+            <h3 class="panel-title-with-info">
+              Slate Color
+              <span class="info-dot" aria-hidden="true">i</span>
+            </h3>
+            <div class="swatch-grid slate-grid">
+              <button
+                v-for="item in slateColors"
+                :key="item.id"
+                type="button"
+                class="swatch slate-card"
+                :class="{ selected: state.slateColorId === item.id }"
+                @click="state.slateColorId = item.id"
+              >
+                <span
+                  class="swatch-chip slate-chip"
+                  :style="{ backgroundImage: item.imageUrl ? `url(${item.imageUrl})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center', width: '100%', height: '60px', borderRadius: '6px' }"
+                />
+                <span class="slate-label">{{ item.label }}</span>
+                <small class="slate-price">${{ item.price.toFixed(2) }}</small>
+                <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
               </button>
             </div>
           </section>
@@ -618,31 +731,23 @@ const onSubmit = async () => {
             <span>Your Custom Sign</span>
           </header>
           <div class="preview-canvas" :style="preview.surfaceStyle">
-          
-            <div v-if="selectedShape?.id"  class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <div
-                v-if="templateImageUrl"
-                class="preview-template-overlay"
-                :style="templateOverlayStyle"
-              />
-              <!-- <div class="preview-live-text">
-                <span
-                  v-for="field in reviewFields"
-                  :key="field.key"
-                  class="preview-line"
-                  :class="field.key"
-                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
-                >
-                  {{ getPreviewFieldValue(field.key) }}
-                </span>
-              </div> -->
-            </div>
+            <template v-if="isNoShapeFlow">
+              <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+              <span v-else class="preview-no-template">Select a template to preview</span>
+            </template>
+            <template v-else>
+              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+            </template>
           </div>
           <ul class="spec-list">
             <li><span>Type</span><strong>{{ selectedSignStyle.label }}</strong></li>
-            <li><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
-            <li><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
-            <li><span>Template</span><strong>{{ selectedTemplate?.label }}</strong></li>
+            <li v-if="!isNoShapeFlow"><span>Shape</span><strong>{{ selectedShape.label }}</strong></li>
+            <li v-if="!isNoShapeFlow"><span>Slate</span><strong>{{ selectedSlateColor.label }}</strong></li>
+            <li v-if="isNoShapeFlow"><span>Template</span><strong>{{ selectedTemplate?.label }}</strong></li>
             <li><span>Paint</span><strong>{{ selectedPaintColor.label }}</strong></li>
             <li><span>Total</span><strong>${{ totalPrice.toFixed(2) }}</strong></li>
           </ul>
@@ -656,7 +761,7 @@ const onSubmit = async () => {
             <p v-if="state.message && state.status === 'error'" class="form-error">{{ state.message }}</p>
 
             <template v-for="field in reviewFields" :key="field.key">
-              <label class="field-label">{{ field.label }}</label>
+              <label class="field-label" style="margin-top:0 ;">{{ field.label }}</label>
               <input
                 v-model="state[field.key]"
                 type="text"
@@ -705,25 +810,18 @@ const onSubmit = async () => {
         </div>
         <aside class="preview-card summary-card">
           <header class="order-summary-header">Order Summary</header>
-          <div ref="previewCaptureRef"   class="preview-canvas" :style="preview.surfaceStyle">
-            <div  v-if="selectedShape?.id"  class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-              <div
-                v-if="templateImageUrl"
-                class="preview-template-overlay"
-                :style="templateOverlayStyle"
-              />
-              <!-- <div class="preview-live-text">
-                <span
-                  v-for="field in reviewFields"
-                  :key="field.key"
-                  class="preview-line"
-                  :class="field.key"
-                  :style="[preview.textStyle, getPreviewTextStyle(field.key)]"
-                >
-                  {{ getPreviewFieldValue(field.key) }}
-                </span>
-              </div> -->
-            </div>
+          <div ref="previewCaptureRef" class="preview-canvas" :style="preview.surfaceStyle">
+            <template v-if="isNoShapeFlow">
+              <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+              <span v-else class="preview-no-template">Select a template to preview</span>
+            </template>
+            <template v-else>
+              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              </div>
+            </template>
           </div> 
           <ul class="summary-list">
             <li class="summary-item"><span>Shape &amp; Size: <strong>{{ selectedShape.label }}</strong></span><strong>${{ (selectedShape.basePrice || 0).toFixed(2) }}</strong></li>
@@ -1243,6 +1341,7 @@ const onSubmit = async () => {
   border-radius: 6px;
 }
 
+.shape-preview.oval_cottage,
 .shape-preview.oval {
   border-radius: 50%;
 }
@@ -1250,10 +1349,11 @@ const onSubmit = async () => {
 .shape-preview.arch {
   border-radius: 50%;
 }
-.shape-preview.arched {
+.shape-preview.arched,
+.preview-sign.arched,
+.slate-chip.arched {
   border-radius: 50% 50% 0% 0;
-}
-
+} 
 .shape-preview.round {
   border-radius: 50%;
 }
@@ -1398,7 +1498,7 @@ const onSubmit = async () => {
   border-radius: 6px;
 }
 
-.slate-chip.oval,
+.slate-chip.oval_cottage,
 .slate-chip.oval {
   border-radius: 50%;
 }
@@ -1596,6 +1696,7 @@ const onSubmit = async () => {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
 }
 
+.preview-sign.oval_cottage,
 .preview-sign.oval {
   border-radius: 90%;
 }
@@ -1767,6 +1868,7 @@ const onSubmit = async () => {
   font-size: 19px; 
   font-weight: 400;
   line-height: 140%; /* 26.6px */
+  margin-bottom: 0 !important;
 }
 
 .summary-note {
@@ -2001,6 +2103,25 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   opacity: 0.65;
   cursor: not-allowed;
 }
+
+/* ── No-shape-flow template preview ─────────────────────────────────── */
+.preview-no-shape-sign {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 280px);
+  height: auto;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.preview-no-template {
+  color: #a8a6b8;
+  font-size: 14px;
+  text-align: center;
+  padding: 24px 16px;
+}
 </style>
 
 <style>
@@ -2065,7 +2186,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.5;
+  line-height: 1.2;
   padding: 0 4px;
   color: #302f37;
 }
@@ -2093,7 +2214,9 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .select2-container--sign-selector .select2-selection--single .select2-selection__arrow b {
   display: none;
 }
-
+.preview-no-shape-sign {
+	border-radius: 50% !important;
+}
 /* Multiple selection tokens */
 .select2-container--sign-selector .select2-selection--multiple .select2-selection__choice {
   /* background: #675d9a; */
