@@ -365,6 +365,7 @@ export const useSignSelectorState = () => {
       checkout: {
         ...payload.value.checkout,
         ...(options.checkoutOverrides || {}),
+        previewImageUrl: options.previewImageUrl || '',
         previewImageDataUrl: options.previewImageDataUrl || '',
         previewImageName: options.previewImageName || ''
       }

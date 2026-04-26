@@ -32,7 +32,7 @@ class SignSelector {
             define( 'SIGN_SELECTOR_PATH', plugin_dir_path( __FILE__ ) );
         }
         if ( ! defined( 'SIGN_SELECTOR_DEV_MODE' ) ) {
-            define( 'SIGN_SELECTOR_DEV_MODE', false );
+            define( 'SIGN_SELECTOR_DEV_MODE', true );
         }
 
         // Admin settings
@@ -194,22 +194,22 @@ class SignSelector {
             );
         }
 
-        // $preview_data_url = '';
-        // if ( ! empty( $decoded['checkout']['previewImageDataUrl'] ) && is_string( $decoded['checkout']['previewImageDataUrl'] ) ) {
-        //     $preview_data_url = $decoded['checkout']['previewImageDataUrl'];
-        // }
-
-        // // Never keep raw base64 image data inside the configuration structure.
-        // if ( isset( $decoded['checkout']['previewImageDataUrl'] ) ) {
-        //     unset( $decoded['checkout']['previewImageDataUrl'] );
-        // }
-
         $configuration = $this->sanitize_configuration_data( $decoded );
 
-        if ( ! $this->is_valid_configuration( $configuration ) ) {
+        $preview_image_url = $this->get_preview_image_url_from_configuration( $configuration );
+        if ( '' !== $preview_image_url ) {
+            $configuration['checkout']['previewImageUrl'] = $preview_image_url;
+        }
+
+        if ( isset( $configuration['checkout']['previewImageDataUrl'] ) ) {
+            unset( $configuration['checkout']['previewImageDataUrl'] );
+        }
+
+        $validation_error = $this->get_validation_error_message( $configuration );
+        if ( '' !== $validation_error ) {
             wp_send_json_error(
                 array(
-                    'message' => __( 'Please complete the required sign options before adding to cart.', 'sign-selector' ),
+                    'message' => $validation_error,
                 ),
                 422
             );
@@ -236,14 +236,7 @@ class SignSelector {
             }
         }
 
-        // $preview_name = isset( $configuration['checkout']['previewImageName'] ) ? (string) $configuration['checkout']['previewImageName'] : '';
-        // $preview_file = $this->save_preview_image( $preview_data_url, $preview_name );
-
-        // if ( ! empty( $preview_file['url'] ) ) {
-        //     $configuration['checkout']['previewImageUrl'] = $preview_file['url'];
-        // }
-
-        // unset( $configuration['checkout']['previewImageDataUrl'], $configuration['checkout']['previewImagePath'] );
+        unset( $configuration['checkout']['previewImagePath'] );
 
         $cart_item_data = array(
             'sign_selector_configuration' => $configuration,
@@ -315,12 +308,16 @@ class SignSelector {
             );
         }
 
-        // if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
-        //     $item_data[] = array(
-        //         'name'  => __( 'Preview', 'sign-selector' ),
-        //         'value' => sprintf( '<a href="%1$s" target="_blank" rel="noopener">%2$s</a>', esc_url( $config['checkout']['previewImageUrl'] ), esc_html__( 'View image', 'sign-selector' ) ),
-        //     );
-        // }
+        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+            $item_data[] = array(
+                'name'  => __( 'Preview', 'sign-selector' ),
+                'value' => sprintf(
+                    '<img src="%1$s" alt="%2$s" style="max-width:120px;height:auto;border-radius:6px;display:block;" />',
+                    esc_url( $config['checkout']['previewImageUrl'] ),
+                    esc_attr__( 'Selected design template preview', 'sign-selector' )
+                ),
+            );
+        }
 
         return $item_data;
     }
@@ -389,9 +386,16 @@ class SignSelector {
             $item->add_meta_data( $label, wp_kses_post( $value ) );
         }
 
-        // if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
-        //     $item->add_meta_data( __( 'Preview Image', 'sign-selector' ), esc_url_raw( $config['checkout']['previewImageUrl'] ) );
-        // }
+        if ( ! empty( $config['checkout']['previewImageUrl'] ) ) {
+            $item->add_meta_data(
+                __( 'Preview', 'sign-selector' ),
+                sprintf(
+                    '<img src="%1$s" alt="%2$s" style="max-width:120px;height:auto;border-radius:6px;display:block;" />',
+                    esc_url( $config['checkout']['previewImageUrl'] ),
+                    esc_attr__( 'Selected design template preview', 'sign-selector' )
+                )
+            );
+        }
 
         // Keep technical keys hidden from customer/admin order item meta views.
         $item->add_meta_data( '_sign_selector_cart_item_key', $cart_item_key );
@@ -471,14 +475,74 @@ class SignSelector {
      * @return bool
      */
     private function is_valid_configuration( $configuration ) {
-        if ( empty( $configuration['sign']['shape']['id'] ) || empty( $configuration['sign']['style']['id'] ) ) {
-            return false;
+        return '' === $this->get_validation_error_message( $configuration );
+    }
+
+    /**
+     * Return first validation error message for cart submission.
+     * Empty string means configuration is valid.
+     *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return string
+     */
+    private function get_validation_error_message( $configuration ) {
+        if ( empty( $configuration['sign']['style']['id'] ) ) {
+            return __( 'Please select a sign style to continue.', 'sign-selector' );
+        }
+
+        $flow = isset( $configuration['sign']['style']['flow'] ) && is_array( $configuration['sign']['style']['flow'] )
+            ? $configuration['sign']['style']['flow']
+            : array();
+
+        $requires_shape = empty( $flow ) || in_array( 'size-shape', $flow, true );
+        if ( $requires_shape && empty( $configuration['sign']['shape']['id'] ) ) {
+            return __( 'Please select a size & shape to continue.', 'sign-selector' );
+        }
+
+        if ( in_array( 'design-template', $flow, true ) && empty( $configuration['sign']['template']['id'] ) ) {
+            return __( 'Please select a design template to continue.', 'sign-selector' );
+        }
+
+        if ( in_array( 'slate-color', $flow, true ) && empty( $configuration['sign']['slateColor']['id'] ) ) {
+            return __( 'Please select a slate color to continue.', 'sign-selector' );
+        }
+
+        if ( in_array( 'paint-color', $flow, true ) && empty( $configuration['sign']['paintColor']['id'] ) ) {
+            return __( 'Please select a paint color to continue.', 'sign-selector' );
         }
 
         if ( empty( $configuration['pricing']['total'] ) || (float) $configuration['pricing']['total'] <= 0 ) {
-            return false;
+            return __( 'Please complete the required sign options before adding to cart.', 'sign-selector' );
         }
 
+        $required_fields = $this->get_required_checkout_fields( $configuration );
+        $field_labels    = array(
+            'firstLine'   => __( 'First Line of Text', 'sign-selector' ),
+            'secondLine'  => __( 'Second Line of Text', 'sign-selector' ),
+            'topText'     => __( 'Top Text', 'sign-selector' ),
+            'houseNumber' => __( 'House Number', 'sign-selector' ),
+            'bottomText'  => __( 'Bottom Text', 'sign-selector' ),
+        );
+
+        foreach ( $required_fields as $lookup_key ) {
+            $value = isset( $configuration['checkout'][ $lookup_key ] ) ? trim( (string) $configuration['checkout'][ $lookup_key ] ) : '';
+
+            if ( '' === $value ) {
+                $label = isset( $field_labels[ $lookup_key ] ) ? $field_labels[ $lookup_key ] : __( 'A required field', 'sign-selector' );
+                return sprintf( __( '%s is required.', 'sign-selector' ), $label );
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Determine required checkout text fields from template metadata.
+     *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return array<int,string>
+     */
+    private function get_required_checkout_fields( $configuration ) {
         $required_fields = array();
 
         if ( isset( $configuration['sign']['template']['fields'] ) && is_array( $configuration['sign']['template']['fields'] ) ) {
@@ -492,6 +556,10 @@ class SignSelector {
                 $required_fields = array( 'houseNumber', 'bottomText' );
             } elseif ( 'number' === $layout ) {
                 $required_fields = array( 'houseNumber' );
+            } elseif ( 'two-lines' === $layout ) {
+                $required_fields = array( 'firstLine', 'secondLine' );
+            } elseif ( 'one-line' === $layout ) {
+                $required_fields = array( 'firstLine' );
             }
         }
 
@@ -499,26 +567,82 @@ class SignSelector {
             $required_fields = array( 'houseNumber', 'bottomText' );
         }
 
+        $normalized = array();
+
         foreach ( $required_fields as $field_key ) {
-            $normalized_key = strtolower( trim( (string) $field_key ) );
-            $lookup_key     = 'houseNumber';
+            $lookup_key = $this->normalize_required_checkout_field_key( $field_key );
 
-            if ( in_array( $normalized_key, array( 'top', 'toptext', 'top_text', 'header', 'title' ), true ) ) {
-                $lookup_key = 'topText';
-            } elseif ( in_array( $normalized_key, array( 'number', 'house', 'housenumber', 'house_number', 'address' ), true ) ) {
-                $lookup_key = 'houseNumber';
-            } elseif ( in_array( $normalized_key, array( 'bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle' ), true ) ) {
-                $lookup_key = 'bottomText';
+            if ( '' === $lookup_key || in_array( $lookup_key, $normalized, true ) ) {
+                continue;
             }
 
-            $value = isset( $configuration['checkout'][ $lookup_key ] ) ? trim( (string) $configuration['checkout'][ $lookup_key ] ) : '';
-
-            if ( '' === $value ) {
-                return false;
-            }
+            $normalized[] = $lookup_key;
         }
 
-        return true;
+        return $normalized;
+    }
+
+    /**
+     * Normalize template field aliases to checkout payload keys.
+     *
+     * @param string $field_key Raw field key.
+     * @return string
+     */
+    private function normalize_required_checkout_field_key( $field_key ) {
+        $normalized_key = strtolower( trim( (string) $field_key ) );
+
+        if ( in_array( $normalized_key, array( 'first', 'firstline', 'first_line', 'line1', 'line_1' ), true ) ) {
+            return 'firstLine';
+        }
+
+        if ( in_array( $normalized_key, array( 'second', 'secondline', 'second_line', 'line2', 'line_2' ), true ) ) {
+            return 'secondLine';
+        }
+
+        if ( in_array( $normalized_key, array( 'top', 'toptext', 'top_text', 'header', 'title' ), true ) ) {
+            return 'topText';
+        }
+
+        if ( in_array( $normalized_key, array( 'number', 'house', 'housenumber', 'house_number', 'address' ), true ) ) {
+            return 'houseNumber';
+        }
+
+        if ( in_array( $normalized_key, array( 'bottom', 'bottomtext', 'bottom_text', 'street', 'footer', 'subtitle' ), true ) ) {
+            return 'bottomText';
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolve preview image URL for metadata display.
+     * Priority: explicit checkout URL, then selected template image URL.
+     *
+     * @param array<string,mixed> $configuration Frontend payload.
+     * @return string
+     */
+    private function get_preview_image_url_from_configuration( $configuration ) {
+        if ( ! is_array( $configuration ) ) {
+            return '';
+        }
+
+        $checkout_preview = isset( $configuration['checkout']['previewImageUrl'] ) && is_string( $configuration['checkout']['previewImageUrl'] )
+            ? trim( $configuration['checkout']['previewImageUrl'] )
+            : '';
+
+        if ( '' !== $checkout_preview ) {
+            return esc_url_raw( $checkout_preview );
+        }
+
+        $template_preview = isset( $configuration['sign']['template']['imageUrl'] ) && is_string( $configuration['sign']['template']['imageUrl'] )
+            ? trim( $configuration['sign']['template']['imageUrl'] )
+            : '';
+
+        if ( '' !== $template_preview ) {
+            return esc_url_raw( $template_preview );
+        }
+
+        return '';
     }
 
     /**

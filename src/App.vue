@@ -350,6 +350,7 @@ const onSubmit = async () => {
 
   await submitConfiguration({
     previewImageName: `sign-preview-${Date.now()}.png`,
+    previewImageUrl: selectedTemplate.value?.imageUrl || '',
     checkoutOverrides: {
       firstLine: reviewFields.value.some((field) => field.key === 'firstLine') ? state.firstLine : '',
       secondLine: reviewFields.value.some((field) => field.key === 'secondLine') ? state.secondLine : '',
@@ -780,6 +781,12 @@ const onSubmit = async () => {
           <section class="panel review-panel"> 
             <p v-if="state.message && state.status === 'error'" class="form-error">{{ state.message }}</p>
 
+            
+            <label class="field-label">Design Template</label>
+            <select v-select2="{ placeholder: 'Select design template' }" v-model="state.templateId" class="field-input">
+              <option v-for="item in availableDesignTemplates" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
+
             <template v-for="field in reviewFields" :key="field.key">
               <label class="field-label" style="margin-top:0 ;">{{ field.label }}</label>
               <input
@@ -792,11 +799,6 @@ const onSubmit = async () => {
               />
               <small v-if="reviewErrors[field.key]" class="field-error">{{ reviewErrors[field.key] }}</small>
             </template>
-
-            <label class="field-label">Sign Style</label>
-            <select v-select2="{ placeholder: 'Select sign style' }" v-model="state.signStyleId" class="field-input">
-              <option v-for="item in signStyles" :key="item.id" :value="item.id">{{ item.label }}</option>
-            </select>
 
             <label class="field-label">Paint Color</label>
             <select v-select2="{ placeholder: 'Select paint color' }" v-model="state.paintColorId" class="field-input">
@@ -2278,6 +2280,12 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
   background: #fff;
+}
+
+/* Keep long option lists scrollable instead of stretching the dropdown */
+.select2-container--sign-selector .select2-results > .select2-results__options {
+  max-height: 280px !important;
+  overflow-y: auto !important;
 }
 
 .select2-container--sign-selector .select2-search--dropdown .select2-search__field {
