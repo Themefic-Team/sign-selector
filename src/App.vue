@@ -48,31 +48,7 @@ watch(
   () => { stepError.value = '' }
 )
 
-const validateCurrentStep = () => {
-  if (state.currentStep === 1 && !state.signStyleId) {
-    return 'Please select a sign style to continue.'
-  }
-  if (isNoShapeFlow.value) {
-    // Custom flow (no size & shape): Step 2 = surface + template, Step 3 = slate + paint
-    if (state.currentStep === 2) {
-      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
-    }
-    if (state.currentStep === 3) {
-      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
-      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
-    }
-  } else {
-    if (state.currentStep === 2) {
-      if (hasSection('size-shape') && !state.shapeId) return 'Please select a size & shape to continue.'
-      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
-    }
-    if (state.currentStep === 3) {
-      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
-      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
-    }
-  }
-  return ''
-}
+const validateCurrentStep = () => validateStep(state.currentStep)
 
 const handleNext = async () => {
   const error = validateCurrentStep()
@@ -85,6 +61,50 @@ const handleNext = async () => {
   await new Promise(r => setTimeout(r, 400))
   isNavigating.value = false
   nextStep()
+}
+
+const validateStep = (step) => {
+  if (step === 1 && !state.signStyleId) {
+    return 'Please select a sign style to continue.'
+  }
+  if (isNoShapeFlow.value) {
+    if (step === 2) {
+      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
+    }
+    if (step === 3) {
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+    }
+  } else {
+    if (step === 2) {
+      if (hasSection('size-shape') && !state.shapeId) return 'Please select a size & shape to continue.'
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
+    }
+    if (step === 3) {
+      if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+    }
+  }
+  return ''
+}
+
+const handleSetStep = (targetStep) => {
+  // Always allow going back
+  if (targetStep <= state.currentStep) {
+    stepError.value = ''
+    setStep(targetStep)
+    return
+  }
+  // Validate every step between current and target
+  for (let s = state.currentStep; s < targetStep; s++) {
+    const error = validateStep(s)
+    if (error) {
+      stepError.value = error
+      return
+    }
+  }
+  stepError.value = ''
+  setStep(targetStep)
 }
 
 const FIELD_META = {
@@ -354,7 +374,7 @@ const onSubmit = async () => {
             complete: state.currentStep > idx + 1
           }"
         >
-          <button type="button" class="tf-step-btn" @click="setStep(idx + 1)">
+          <button type="button" class="tf-step-btn" @click="handleSetStep(idx + 1)">
             <span class="tf-dot" />
             <span class="tf-label">{{ sd.title }}</span>
           </button>
