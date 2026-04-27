@@ -41,6 +41,7 @@ const allInstallationSurfaces = toArray(cfg.surfaces).map(s => ({
 const slateColors = toArray(cfg.slateColors).map(item => ({
   ...item,
   price: Number(item.price) || 0,
+  shapeIds: Array.isArray(item.shapeIds) ? item.shapeIds.map(normalizeShapeId).filter(Boolean) : null,
   images: item.images || {},
   imageUrl: item.imageUrl || (item.images && item.images.default) || ''
 }))
@@ -141,6 +142,35 @@ const getSurfacesForSignStyle = (signStyleId) => {
   })
 }
 
+const getSlateColorImageUrl = (slateColor, shapeId) => {
+  if (!slateColor || typeof slateColor !== 'object') return ''
+
+  const normalizedShapeId = normalizeShapeId(shapeId)
+  const shapeImages = slateColor.images && typeof slateColor.images === 'object' ? slateColor.images : {}
+
+  if (normalizedShapeId && shapeImages[normalizedShapeId]) {
+    return shapeImages[normalizedShapeId]
+  }
+
+  return slateColor.imageUrl || shapeImages.default || ''
+}
+
+const getSlateColorsForShape = (shapeId) => {
+  const normalizedShapeId = normalizeShapeId(shapeId)
+
+  return slateColors.filter((item) => {
+    if (!Array.isArray(item.shapeIds)) {
+      return true
+    }
+
+    if (!normalizedShapeId) {
+      return item.shapeIds.length > 0
+    }
+
+    return item.shapeIds.includes(normalizedShapeId)
+  })
+}
+
 export const useSignSelectorState = () => {
   const initialSignStyleId = resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || '')
   const initialShapes = getShapesForSignStyle(initialSignStyleId)
@@ -173,9 +203,10 @@ export const useSignSelectorState = () => {
   const selectedSignStyle = computed(() => state.signStyleId ? (signStyles.find(i => i.id === state.signStyleId) || null) : null)
   const shapes = computed(() => getShapesForSignStyle(state.signStyleId))
   const installationSurfaces = computed(() => getSurfacesForSignStyle(state.signStyleId))
+  const availableSlateColors = computed(() => getSlateColorsForShape(state.shapeId))
   const selectedSurface = computed(() => state.surfaceId ? (installationSurfaces.value.find(i => i.id === state.surfaceId) || {}) : {})
   const selectedShape = computed(() => state.shapeId ? (shapes.value.find(i => i.id === state.shapeId) || {}) : {})
-  const selectedSlateColor = computed(() => state.slateColorId ? (slateColors.find(i => i.id === state.slateColorId) || { price: 0, images: {}, imageUrl: '', hex: '' }) : { price: 0, images: {}, imageUrl: '', hex: '' })
+  const selectedSlateColor = computed(() => state.slateColorId ? (availableSlateColors.value.find(i => i.id === state.slateColorId) || { price: 0, images: {}, imageUrl: '', hex: '' }) : { price: 0, images: {}, imageUrl: '', hex: '' })
   const availableDesignTemplates = computed(() => {
     const ignoreShape = !activeFlow.value.includes('size-shape')
     return getTemplatesForSelection(state.shapeId, state.signStyleId, ignoreShape)
@@ -232,8 +263,8 @@ export const useSignSelectorState = () => {
     },
     signStyle: {
       backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
-      backgroundImage: (selectedSlateColor.value.images?.[selectedShape.value.id] || selectedSlateColor.value.imageUrl)
-        ? `linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), url("${selectedSlateColor.value.images?.[selectedShape.value.id] || selectedSlateColor.value.imageUrl}")`
+      backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)
+        ? `linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
         : 'none',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
@@ -314,6 +345,10 @@ export const useSignSelectorState = () => {
     // Only clear templateId if the current one is no longer valid — never auto-select
     if (state.templateId && !matchingTemplates.some((item) => item.id === state.templateId)) {
       state.templateId = ''
+    }
+
+    if (state.slateColorId && !availableSlateColors.value.some((item) => item.id === state.slateColorId)) {
+      state.slateColorId = ''
     }
   })
 
@@ -411,7 +446,7 @@ export const useSignSelectorState = () => {
     signStyles,
     installationSurfaces,
     shapes,
-    slateColors,
+    slateColors: availableSlateColors,
     designTemplates,
     availableDesignTemplates,
     paintColors,
@@ -428,6 +463,7 @@ export const useSignSelectorState = () => {
     totalPrice,
     preview,
     payload,
+    getSlateColorImageUrl,
     isFirstStep: computed(() => state.currentStep === 1),
     isLastStep: computed(() => state.currentStep === totalSteps.value),
     setStep,

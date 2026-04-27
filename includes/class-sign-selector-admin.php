@@ -406,6 +406,10 @@ class Sign_Selector_Admin {
             array( 'id' => 'arch',      'label' => '24" x 12"',  'width' => 24, 'height' => 12,  'basePrice' => 240, 'signStyleIds' => $all_sign_style_ids, 'enabled' => true ),
         );
 
+        $all_shape_ids = array_values( array_map( function( $shape ) {
+            return isset( $shape['id'] ) ? $shape['id'] : '';
+        }, $shapes ) );
+
         // Slate Colors – with shape-specific image overrides
         $slate_base_files = array(
             'black'        => 'slate_black.jpg',
@@ -433,13 +437,13 @@ class Sign_Selector_Admin {
         );
 
         $slate_colors = array(
-            array( 'id' => 'black',        'label' => 'Black',        'price' => 0,  'enabled' => true ),
-            array( 'id' => 'mottle-black', 'label' => 'Mottle Black', 'price' => 15, 'enabled' => true ),
-            array( 'id' => 'gray',         'label' => 'Gray',         'price' => 15, 'enabled' => true ),
-            array( 'id' => 'green',        'label' => 'Green',        'price' => 0,  'enabled' => true ),
-            array( 'id' => 'red',          'label' => 'Red',          'price' => 20, 'enabled' => true ),
-            array( 'id' => 'variegated',   'label' => 'Variegated',   'price' => 30, 'enabled' => true ),
-            array( 'id' => 'burgundy',     'label' => 'Burgundy',     'price' => 25, 'enabled' => true ),
+            array( 'id' => 'black',        'label' => 'Black',        'price' => 0,  'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'mottle-black', 'label' => 'Mottle Black', 'price' => 15, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'gray',         'label' => 'Gray',         'price' => 15, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'green',        'label' => 'Green',        'price' => 0,  'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'red',          'label' => 'Red',          'price' => 20, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'variegated',   'label' => 'Variegated',   'price' => 30, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'burgundy',     'label' => 'Burgundy',     'price' => 25, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
         );
 
         foreach ( $slate_colors as &$sc ) {

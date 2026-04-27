@@ -396,8 +396,8 @@
       editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
           el('h3', { className: 'ss-template-options-title' }, isAddingStyle ? __('Add Style', 'sign-selector') : __('Edit Style', 'sign-selector')),
-          el('div', { className: 'ss-template-form-grid' },
-            el('div', { className: 'ss-template-options-section' },
+          el('div', { className: 'ss-template-form-grid ss-slate-form-grid' },
+            el('div', { className: 'ss-template-options-section ss-slate-basic-section' },
               el('h4', null, __('Basic Details', 'sign-selector')),
               el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
@@ -822,14 +822,21 @@
 
   const SlateColorsTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/slate-colors');
-    const [shapeIds, setShapeIds] = useState(['default']);
+    const [shapeOptions, setShapeOptions] = useState([]);
     const [editingIndex, setEditingIndex] = useState(null);
     const [isAddingColor, setIsAddingColor] = useState(false);
 
     useEffect(() => {
       apiFetch({ path: '/sign-selector/v1/shapes' }).then((data) => {
-        const ids = (Array.isArray(data) ? data : []).map((s) => s.id).filter(Boolean);
-        setShapeIds(['default'].concat(ids));
+        const options = (Array.isArray(data) ? data : [])
+          .filter((shape) => shape && shape.id)
+          .map((shape) => ({
+            id: shape.id,
+            label: shape.label || shape.id,
+            width: shape.width,
+            height: shape.height
+          }));
+        setShapeOptions(options);
       }).catch(() => {});
     }, []);
 
@@ -848,8 +855,61 @@
       setItems(next);
     };
 
+    const getAssignedShapeIds = (item) => {
+      if (Array.isArray(item.shapeIds)) {
+        return item.shapeIds;
+      }
+
+      return shapeOptions.map((shape) => shape.id);
+    };
+
+    const toggleShape = (index, shapeId, checked) => {
+      const next = [...items];
+      const currentIds = getAssignedShapeIds(next[index]);
+      const nextIds = checked
+        ? Array.from(new Set([...currentIds, shapeId]))
+        : currentIds.filter((id) => id !== shapeId);
+
+      next[index] = { ...next[index], shapeIds: nextIds };
+      setItems(next);
+    };
+
+    const getShapeSummary = (item) => {
+      const assignedIds = getAssignedShapeIds(item);
+
+      if (!shapeOptions.length || assignedIds.length === shapeOptions.length) {
+        return __('All sizes & shapes', 'sign-selector');
+      }
+
+      if (!assignedIds.length) {
+        return __('No sizes & shapes selected', 'sign-selector');
+      }
+
+      return assignedIds
+        .map((id) => shapeOptions.find((shape) => shape.id === id)?.id || id)
+        .filter(Boolean)
+        .join(', ');
+    };
+
+    const getShapeDisplayLabel = (shapeId) => {
+      if (shapeId === 'default') {
+        return __('Default', 'sign-selector');
+      }
+
+      const shape = shapeOptions.find((s) => s.id === shapeId);
+      if (!shape) return shapeId; 
+
+      return shape.id + ` ( ` + shape.label  + ` )` ;
+    };
+
+    const getVisibleShapeIds = (item) => {
+      const assigned = getAssignedShapeIds(item);
+      // Always include 'default', plus any checked shapes
+      return ['default'].concat(assigned);
+    };
+
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', price: 0, imageUrl: '', images: {}, enabled: true }];
+      const nextItems = [...items, { id: uid(), label: '', price: 0, imageUrl: '', images: {}, shapeIds: shapeOptions.map((shape) => shape.id), enabled: true }];
       setItems(nextItems);
       setIsAddingColor(true);
       setEditingIndex(nextItems.length - 1);
@@ -865,6 +925,17 @@
       setIsAddingColor(false);
     };
 
+    const saveSlateColors = () => {
+      const normalized = items.map((item) => ({
+        ...item,
+        shapeIds: Array.isArray(item.shapeIds)
+          ? item.shapeIds
+          : shapeOptions.map((shape) => shape.id)
+      }));
+
+      save(normalized);
+    };
+
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
 
     return el(Fragment, null,
@@ -878,6 +949,7 @@
             el('th', null, __('Preview', 'sign-selector')),
             el('th', null, __('Slate Color', 'sign-selector')),
             el('th', null, __('Price ($)', 'sign-selector')),
+            el('th', null, __('Sizes & Shapes', 'sign-selector')),
             el('th', null, __('Status', 'sign-selector')),
             el('th', null, __('Actions', 'sign-selector'))
           )
@@ -896,6 +968,7 @@
                 )
               ),
               el('td', null, Number(item.price ?? 0).toFixed(2)),
+              el('td', null, getShapeSummary(item)),
               el('td', null,
                 el('span', { className: `ss-status-pill ${item.enabled !== false ? 'enabled' : 'disabled'}` }, item.enabled !== false ? __('Enabled', 'sign-selector') : __('Disabled', 'sign-selector'))
               ),
@@ -908,7 +981,7 @@
         )
       ),
       el('div', { className: 'ss-save-bar' },
-        el('button', { className: 'ss-btn ss-btn-primary', onClick: () => save() }, __('Save Slate Colors', 'sign-selector'))
+        el('button', { className: 'ss-btn ss-btn-primary', onClick: saveSlateColors }, __('Save Slate Colors', 'sign-selector'))
       ),
       el(Toast, toast),
       editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
@@ -934,12 +1007,25 @@
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
               )
             ),
-            el('div', { className: 'ss-template-options-section', style: { gridColumn: 'span 2' } },
+            el('div', { className: 'ss-template-options-section ss-slate-shapes-section' },
+              el('h4', null, __('Show For Sizes & Shapes', 'sign-selector')),
+              shapeOptions.map((shape) =>
+                el('label', { key: shape.id, className: 'ss-template-option-check' },
+                  el('input', {
+                    type: 'checkbox',
+                    checked: getAssignedShapeIds(items[editingIndex]).includes(shape.id),
+                    onChange: (e) => toggleShape(editingIndex, shape.id, e.target.checked)
+                  }),
+                  getShapeDisplayLabel(shape.id)
+                )
+              )
+            ),
+            el('div', { className: 'ss-template-options-section ss-slate-images-section' },
               el('h4', null, __('Shape-specific Images', 'sign-selector')),
               el('div', { className: 'ss-shape-images-grid' },
-                shapeIds.map(shapeId =>
+                getVisibleShapeIds(items[editingIndex]).map(shapeId =>
                   el('div', { className: 'ss-shape-img-item', key: shapeId },
-                    el('label', { className: 'ss-template-field-label' }, shapeId),
+                    el('label', { className: 'ss-template-field-label' }, getShapeDisplayLabel(shapeId)),
                     items[editingIndex].images && items[editingIndex].images[shapeId]
                       ? el('img', { className: 'ss-img-preview', src: items[editingIndex].images[shapeId], alt: shapeId })
                       : null,

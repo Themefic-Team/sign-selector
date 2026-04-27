@@ -148,7 +148,7 @@ class SignSelector {
                 'plugin_directory_url' => SIGN_SELECTOR_URL,
                 'action'  => 'sign_selector_save_configuration',
                 'nonce'   => wp_create_nonce( 'sign_selector_nonce' ),
-                'cartUrl' => function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '',
+                'cartUrl' => function_exists( 'wc_get_checkout_url' ) ? wc_get_checkout_url() : '',
                 'editCartItemKey' => $edit_context['editCartItemKey'],
                 'initialConfiguration' => $edit_context['initialConfiguration'],
                 'configurator' => $configurator_data,
@@ -265,7 +265,7 @@ class SignSelector {
                 'message'       => __( 'Configuration added to cart.', 'sign-selector' ),
                 'configuration' => $configuration,
                 'cartItemKey'   => $cart_item_key,
-                'cartUrl'       => wc_get_cart_url(),
+                'cartUrl'       => function_exists( 'wc_get_checkout_url' ) ? wc_get_checkout_url() : '',
             )
         );
     }

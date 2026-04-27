@@ -26,6 +26,7 @@ const {
   totalPrice,
   payload,
   preview,
+  getSlateColorImageUrl,
   isFirstStep,
   isLastStep,
   setStep,
@@ -141,6 +142,41 @@ const hasTiers = computed(() => availableTemplateTiers.value.length > 1)
 // True when size-shape is not in the active flow (e.g. "Something Custom")
 // In this case Design Template moves to Step 2 and Slate/Paint move to Step 3
 const isNoShapeFlow = computed(() => !hasSection('size-shape'))
+const selectedStyleSubtitle = computed(() => selectedSignStyle.value?.label ? `Style: ${selectedSignStyle.value.label}` : '')
+
+const hasValueForSection = (sectionId) => {
+  if (sectionId === 'installation-surface') return Boolean(state.surfaceId)
+  if (sectionId === 'size-shape') return Boolean(state.shapeId)
+  if (sectionId === 'slate-color') return Boolean(state.slateColorId)
+  if (sectionId === 'design-template') return Boolean(state.templateId)
+  if (sectionId === 'paint-color') return Boolean(state.paintColorId)
+  return true
+}
+
+const canEditSectionInFlow = (currentSectionId, orderedFlow) => {
+  const currentIndex = orderedFlow.indexOf(currentSectionId)
+  if (currentIndex < 0) return true
+
+  for (let i = 0; i < currentIndex; i++) {
+    const prevSectionId = orderedFlow[i]
+    if (!hasSection(prevSectionId)) continue
+    if (!hasValueForSection(prevSectionId)) return false
+  }
+
+  return true
+}
+
+const canSelectTemplateStep2 = computed(() => {
+  if (!isNoShapeFlow.value) return true
+  return canEditSectionInFlow('design-template', ['installation-surface', 'design-template'])
+})
+
+const canSelectShape = computed(() => canEditSectionInFlow('size-shape', ['installation-surface', 'size-shape', 'slate-color']))
+const canSelectSlateStep2 = computed(() => canEditSectionInFlow('slate-color', ['installation-surface', 'size-shape', 'slate-color']))
+const canSelectTemplateStep3 = computed(() => canEditSectionInFlow('design-template', ['design-template', 'paint-color']))
+const canSelectSlateStep3 = computed(() => canEditSectionInFlow('slate-color', ['design-template', 'slate-color', 'paint-color']))
+const canSelectPaintStep3 = computed(() => canEditSectionInFlow('paint-color', ['design-template', 'paint-color']))
+const canSelectPaintStep3NoShape = computed(() => canEditSectionInFlow('paint-color', ['design-template', 'slate-color', 'paint-color']))
 
 watch(availableTemplateTiers, (tiers) => {
   if (!tiers.length) {
@@ -420,6 +456,7 @@ const onSubmit = async () => {
               Installation Surface
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
+            <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
             <div class="surface-scroller">
               <div class="pill-grid surface-grid">
                 <button
@@ -440,7 +477,7 @@ const onSubmit = async () => {
           </section>
 
           <!-- Design Template — shown in Step 2 when size-shape is not in flow -->
-          <section v-if="isNoShapeFlow && hasSection('design-template')" class="panel">
+          <section v-if="isNoShapeFlow && hasSection('design-template')" class="panel" :class="{ 'panel-disabled': !canSelectTemplateStep2 }">
             <div class="design-template-header">
               <h3 class="panel-title-with-info">
               Select Design Template
@@ -475,6 +512,7 @@ const onSubmit = async () => {
                 :key="item.id"
                 type="button"
                 class="tile template-tile"
+                  :disabled="!canSelectTemplateStep2"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
@@ -490,6 +528,7 @@ const onSubmit = async () => {
                 :key="item.id"
                 type="button"
                 class="tile template-tile"
+                  :disabled="!canSelectTemplateStep2"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
@@ -499,17 +538,19 @@ const onSubmit = async () => {
           </section>
 
           <!-- Size & Shape (flow-dependent) -->
-          <section v-if="!isNoShapeFlow && hasSection('size-shape')" class="panel size-panel">
+          <section v-if="!isNoShapeFlow && hasSection('size-shape')" class="panel size-panel" :class="{ 'panel-disabled': !canSelectShape }">
             <h3 class="panel-title-with-info">
               Size & Shape
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
+            <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
             <div class="shape-grid">
               <button
                 v-for="item in shapes"
                 :key="item.id"
                 type="button"
                 class="tile shape-card"
+                :disabled="!canSelectShape"
                 :class="{ selected: state.shapeId === item.id }"
                 @click="state.shapeId = item.id"
               >
@@ -523,17 +564,19 @@ const onSubmit = async () => {
           </section>
 
           <!-- Slate Color (flow-dependent, only shown in Step 2 for normal flow) -->
-          <section v-if="!isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel">
+          <section v-if="!isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel" :class="{ 'panel-disabled': !canSelectSlateStep2 }">
             <h3 class="panel-title-with-info">
               Slate Color
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
+            <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
             <div class="swatch-grid slate-grid">
               <button
                 v-for="item in slateColors"
                 :key="item.id"
                 type="button"
                 class="swatch slate-card"
+                :disabled="!canSelectSlateStep2"
                 :class="{ selected: state.slateColorId === item.id }"
                 @click="state.slateColorId = item.id"
               >
@@ -542,7 +585,7 @@ const onSubmit = async () => {
                   :class="selectedShape.id"
                   :style="getSlateChipStyle(
                     selectedShape,
-                    item.images?.[selectedShape.id] || item.imageUrl
+                    getSlateColorImageUrl(item, selectedShape.id)
                   )"
                 />
                 <span class="slate-label">{{ item.label }}</span>
@@ -609,7 +652,7 @@ const onSubmit = async () => {
       <div v-if="state.currentStep === 3" class="split-layout">
         <div class="panel-stack">
           <!-- Design Template (shown in Step 3 only for normal flow; moved to Step 2 when no size-shape) -->
-          <section v-if="!isNoShapeFlow && hasSection('design-template')" class="panel">
+          <section v-if="!isNoShapeFlow && hasSection('design-template')" class="panel" :class="{ 'panel-disabled': !canSelectTemplateStep3 }">
             <div class="design-template-header">
               <h3 class="panel-title-with-info">
               Select Design Template
@@ -644,6 +687,7 @@ const onSubmit = async () => {
                 :key="item.id"
                 type="button"
                 class="tile template-tile"
+                  :disabled="!canSelectTemplateStep3"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
@@ -659,6 +703,7 @@ const onSubmit = async () => {
                 :key="item.id"
                 type="button"
                 class="tile template-tile"
+                  :disabled="!canSelectTemplateStep3"
                 :class="{ selected: state.templateId === item.id }"
                 @click="state.templateId = item.id"
               >
@@ -669,23 +714,25 @@ const onSubmit = async () => {
           </section>
 
           <!-- Slate Color (moved to Step 3 when no size-shape flow) -->
-          <section v-if="isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel">
+          <section v-if="isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel" :class="{ 'panel-disabled': !canSelectSlateStep3 }">
             <h3 class="panel-title-with-info">
               Slate Color
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
+            <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
             <div class="swatch-grid slate-grid">
               <button
                 v-for="item in slateColors"
                 :key="item.id"
                 type="button"
                 class="swatch slate-card"
+                :disabled="!canSelectSlateStep3"
                 :class="{ selected: state.slateColorId === item.id }"
                 @click="state.slateColorId = item.id"
               >
                 <span
                   class="swatch-chip slate-chip"
-                  :style="{ backgroundImage: item.imageUrl ? `url(${item.imageUrl})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center', width: '100%', height: '60px', borderRadius: '6px' }"
+                  :style="{ backgroundImage: getSlateColorImageUrl(item, selectedShape.id) ? `url(${getSlateColorImageUrl(item, selectedShape.id)})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center', width: '100%', height: '60px', borderRadius: '6px' }"
                 />
                 <span class="slate-label">{{ item.label }}</span>
                 <small class="slate-price">${{ item.price.toFixed(2) }}</small>
@@ -695,17 +742,19 @@ const onSubmit = async () => {
           </section>
 
           <!-- Paint Color (flow-dependent) -->
-          <section v-if="hasSection('paint-color')" class="panel paint-panel">
+          <section v-if="hasSection('paint-color')" class="panel paint-panel" :class="{ 'panel-disabled': isNoShapeFlow ? !canSelectPaintStep3NoShape : !canSelectPaintStep3 }">
             <h3 class="panel-title-with-info">
               Paint Color
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
+            <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
             <div class="swatch-grid paint-grid">
               <button
                 v-for="item in paintColors"
                 :key="item.id"
                 type="button"
                 class="swatch paint-card"
+                :disabled="isNoShapeFlow ? !canSelectPaintStep3NoShape : !canSelectPaintStep3"
                 :class="{ selected: state.paintColorId === item.id }"
                 @click="state.paintColorId = item.id"
               >
@@ -1254,6 +1303,21 @@ const onSubmit = async () => {
   font-size: 16px; 
   font-weight: 600;
   line-height: 160%; /* 25.6px */
+}
+
+.panel-style-subtitle {
+  margin: 2px 0 12px;
+  color: #6b6b7a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.panel-disabled {
+  opacity: 0.65;
+}
+
+.panel-disabled button {
+  cursor: not-allowed;
 }
 
 .installation-panel {
@@ -2333,4 +2397,9 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   clip: rect(0 0 0 0) !important;
   white-space: nowrap !important;
 }
+
+
+
+
+
 </style>
