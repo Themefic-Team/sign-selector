@@ -51,6 +51,22 @@ watch(
 
 const validateCurrentStep = () => validateStep(state.currentStep)
 
+const selectChoiceAndAutoAdvance = async (fieldKey, value) => {
+  if (isNavigating.value || isLastStep.value) return
+  if (state[fieldKey] === value) return
+
+  state[fieldKey] = value
+  stepError.value = ''
+
+  const error = validateCurrentStep()
+  if (error) return
+
+  isNavigating.value = true
+  await new Promise(r => setTimeout(r, 220))
+  isNavigating.value = false
+  nextStep()
+}
+
 const handleNext = async () => {
   const error = validateCurrentStep()
   if (error) {
@@ -368,14 +384,14 @@ const getSlateChipStyle = (shape, imageUrl) => ({
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? 'min(100%, 172px)' : shape?.id === 'oval' ? 'min(100%, 210px)' : 'min(100%, 240px)',
-  minHeight: 'auto'
+  width: shape?.id === 'round' ? 'min(100%, 180px)' : shape?.id === 'oval' || shape?.id === 'rectangle' ? 'min(100%, 300px)' : 'min(100%, 350px)',
+  minHeight: 'auto' 
 })
 
 const onSubmit = async () => {
   if (state.status === 'submitting') return
   state.firstLine = String(state.firstLine || '').trim()
-  state.secondLine = String(state.secondLine || '').trim()
+  state.secondLine = String(state.secondLine || '').trim()  
   state.topText = String(state.topText || '').trim()
   state.houseNumber = String(state.houseNumber || '').trim()
   state.bottomText = String(state.bottomText || '').trim()
@@ -432,7 +448,7 @@ const onSubmit = async () => {
           class="choice-card"
           :aria-pressed="state.signStyleId === item.id"
           :class="{ selected: state.signStyleId === item.id }"
-          @click="state.signStyleId = item.id"
+          @click="selectChoiceAndAutoAdvance('signStyleId', item.id)"
         >
           <span class="choice-icon">
             <img v-if="item.iconUrl" :src="item.iconUrl" :alt="item.label" class="choice-icon-img" />
@@ -496,8 +512,8 @@ const onSubmit = async () => {
                   type="button"
                   class="tier-tab"
                   :class="{ active: activeTier === 'Standard' }"
-                  @click="activeTier = 'Standard'"
-                >Standard</button>
+                  @click="activeTier = 'Regular'"
+                >Regular</button>
               </div>
             </div>
 
@@ -625,7 +641,7 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-overlay" :style="templateOverlayStyle" />
@@ -672,7 +688,7 @@ const onSubmit = async () => {
                   class="tier-tab"
                   :class="{ active: activeTier === 'Standard' }"
                   @click="activeTier = 'Standard'"
-                >Standard</button>
+                >Regular</button>
               </div>
             </div>
 
@@ -705,7 +721,7 @@ const onSubmit = async () => {
                 class="tile template-tile"
                   :disabled="!canSelectTemplateStep3"
                 :class="{ selected: state.templateId === item.id }"
-                @click="state.templateId = item.id"
+                @click="selectChoiceAndAutoAdvance('templateId', item.id)"
               >
                 <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
                 <!-- <span>{{ item.label }}</span> -->
@@ -728,7 +744,7 @@ const onSubmit = async () => {
                 class="swatch slate-card"
                 :disabled="!canSelectSlateStep3"
                 :class="{ selected: state.slateColorId === item.id }"
-                @click="state.slateColorId = item.id"
+                @click="selectChoiceAndAutoAdvance('slateColorId', item.id)"
               >
                 <span
                   class="swatch-chip slate-chip"
@@ -830,6 +846,13 @@ const onSubmit = async () => {
           <section class="panel review-panel"> 
             <p v-if="state.message && state.status === 'error'" class="form-error">{{ state.message }}</p>
 
+            <div class="proof-section">
+              <p class="proof-text">All signs are individually designed using classic stone cutter fonts to maximize readability. We will not create a sign that we feel is ugly or unreadable without your consent. You can trust our judgement or be absolutely certain of your decision by requesting a "proof" which we're happy to e-mail. Upon receipt of the proof you must respond within 48 hours to avoid the order being cancelled.</p>
+              <label class="proof-checkbox">
+                <input type="checkbox" v-model="state.requireProof" />
+                <span>YES, I require a proof. If left blank, the sign can go directly into production.</span>
+              </label>
+            </div>
             
             <label class="field-label">Design Template</label>
             <select v-select2="{ placeholder: 'Select design template' }" v-model="state.templateId" class="field-input">
@@ -854,14 +877,14 @@ const onSubmit = async () => {
               <option v-for="item in paintColors" :key="item.id" :value="item.id">{{ item.label }}</option>
             </select>
 
-            <label class="field-label">Add-ons</label>
-            <select v-select2="{ placeholder: 'Select add-ons' }" v-model="state.addOnIds" class="field-input" multiple>
-              <option v-for="item in addOns" :key="item.id" :value="item.id">{{ item.label }}</option>
-            </select>
-
             <label class="field-label">Mounting Hardware</label>
             <select v-select2="{ placeholder: 'Select mounting hardware' }" v-model="state.hardwareId" class="field-input">
               <option v-for="item in mountingHardware" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
+
+            <label class="field-label">Add-ons</label>
+            <select v-select2="{ placeholder: 'Select add-ons' }" v-model="state.addOnIds" class="field-input" multiple>
+              <option v-for="item in addOns" :key="item.id" :value="item.id">{{ item.label }}</option>
             </select>
           </section>
           
@@ -1233,7 +1256,7 @@ const onSubmit = async () => {
 
 .split-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 450px;
   gap: 18px;
   align-items: start;
 }
@@ -1762,11 +1785,13 @@ const onSubmit = async () => {
 
 .preview-canvas {
   border-radius: 10px;
-  min-height: 280px;
+  min-height: 275px; 
+  /* width: 400px; */
   display: grid;
   place-items: center;
   border: 1px solid #d4d3de;
   margin-bottom: 10px;
+  padding: 16px; 
 }
 
 .preview-sign {
@@ -1776,10 +1801,11 @@ const onSubmit = async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  border: 2px solid rgba(0, 0, 0, 0.18);
+  align-items: center; 
   color: #f8f2d8;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
+  -webkit-box-shadow: 5px 5px 9px 1px rgba(0,0,0,0.56); 
+box-shadow: 5px 5px 9px 1px rgba(0,0,0,0.56);
 }
 
 .preview-sign.oval_cottage,
@@ -1788,13 +1814,13 @@ const onSubmit = async () => {
 }
 
 .preview-sign.rectangle {
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 .preview-sign.arch {
   border-radius: 50%;
 }
-
+ 
 .preview-sign.round {
   border-radius: 50%;
 }
@@ -2398,8 +2424,44 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   white-space: nowrap !important;
 }
 
+.preview-canvas.arch {
+	background-size: 105% !important;
+}
 
+.preview-canvas.round {
+	background-size: 125% !important;
+}
+.preview-sign.round .preview-template-overlay {
+	background-size: 105% !important;
+}
 
-
-
+.proof-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+.proof-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 16px 0;
+}
+.proof-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.proof-checkbox input {
+  margin-top: 3px;
+  cursor: pointer;
+}
+.select2-selection__rendered {
+	margin: 0 !important;
+}
 </style>

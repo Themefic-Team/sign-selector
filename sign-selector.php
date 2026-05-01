@@ -52,6 +52,7 @@ class SignSelector {
             add_action( 'woocommerce_before_calculate_totals', [ $this, 'apply_sign_selector_cart_price' ], 20 );
             add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'add_order_item_meta' ], 10, 4 );
             add_filter( 'woocommerce_cart_item_name', [ $this, 'append_edit_item_link' ], 10, 3 );
+            add_filter( 'woocommerce_checkout_cart_item_quantity', [ $this, 'remove_checkout_item_quantity' ], 10, 3 );
         }
     }
 
@@ -295,6 +296,7 @@ class SignSelector {
             __( 'Paint', 'sign-selector' ) => $config['sign']['paintColor']['label'] ?? '',
             __( 'Add-on', 'sign-selector' ) => $config['sign']['addOn']['label'] ?? '',
             __( 'Hardware', 'sign-selector' ) => $config['sign']['hardware']['label'] ?? '',
+            __( 'Proof Required', 'sign-selector' ) => ! empty( $config['checkout']['requireProof'] ) ? 'Yes' : 'No',
         );
 
         foreach ( $meta_map as $label => $value ) {
@@ -376,6 +378,7 @@ class SignSelector {
             __( 'Paint', 'sign-selector' ) => $config['sign']['paintColor']['label'] ?? '',
             __( 'Add-on', 'sign-selector' ) => $config['sign']['addOn']['label'] ?? '',
             __( 'Hardware', 'sign-selector' ) => $config['sign']['hardware']['label'] ?? '',
+            __( 'Proof Required', 'sign-selector' ) => ! empty( $config['checkout']['requireProof'] ) ? 'Yes' : 'No',
         );
 
         foreach ( $meta_map as $label => $value ) {
@@ -401,14 +404,6 @@ class SignSelector {
         $item->add_meta_data( '_sign_selector_cart_item_key', $cart_item_key );
     }
 
-    /**
-     * Add an edit link for sign-selector items in cart.
-     *
-     * @param string               $item_name Existing item name HTML.
-     * @param array<string,mixed>  $cart_item Cart item data.
-     * @param string               $cart_item_key Cart key.
-     * @return string
-     */
     public function append_edit_item_link( $item_name, $cart_item, $cart_item_key ) {
         if ( empty( $cart_item['sign_selector_configuration'] ) ) {
             return $item_name;
@@ -421,11 +416,27 @@ class SignSelector {
 
         $edit_url = add_query_arg( 'sign_selector_edit_item', rawurlencode( $cart_item_key ), $selector_page_url );
 
-        return $item_name . sprintf(
-            ' <br><small><a href="%1$s">%2$s</a></small>',
+        return sprintf(
+            '<a href="%1$s" class="sign-selector-edit-item-link" style="font-weight: 600;">%2$s</a>',
             esc_url( $edit_url ),
             esc_html__( 'Edit item', 'sign-selector' )
         );
+    }
+
+    /**
+     * Remove the item quantity text (e.g. "x 1") from the checkout page for configurator products.
+     *
+     * @param string              $quantity_html Existing quantity HTML.
+     * @param array<string,mixed> $cart_item Cart item data.
+     * @param string              $cart_item_key Cart key.
+     * @return string
+     */
+    public function remove_checkout_item_quantity( $quantity_html, $cart_item, $cart_item_key ) {
+        if ( ! empty( $cart_item['sign_selector_configuration'] ) ) {
+            return '';
+        }
+
+        return $quantity_html;
     }
 
     /**

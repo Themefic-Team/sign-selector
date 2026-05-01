@@ -245,7 +245,7 @@ class Sign_Selector_Admin {
         $shape_dirs = array( 'arch', 'oval', 'rectangle', 'round' );
         $tier_dirs  = array(
             'deluxe'  => 'Deluxe',
-            'standard' => 'Standard',
+            'standard' => 'Regular',
         );
 
         $templates = array();
@@ -423,6 +423,7 @@ class Sign_Selector_Admin {
 
         $slate_shape_overrides = array(
             'rectangle' => array(
+                'black'      => '10x13black.jpg',
                 'gray'       => '10x13grey.jpg',
                 'green'      => '10x13green.jpg',
                 'red'        => '10x13red.jpg',
@@ -478,14 +479,14 @@ class Sign_Selector_Admin {
 
         // Add-ons
         $addons = array(
-            array( 'id' => 'none',         'label' => 'No add-ons',              'price' => 0,  'enabled' => true ),
+            array( 'id' => 'none',         'label' => 'No add-ons',              'price' => 0,  'enabled' => true, 'isDefault' => true ),
             array( 'id' => 'night-vision', 'label' => 'Night Vision ($15)',       'price' => 15, 'enabled' => true ),
             array( 'id' => 'reflective',   'label' => 'Reflective Paint ($20)',   'price' => 20, 'enabled' => true ),
         );
 
         // Mounting Hardware
         $mounting_hardware = array(
-            array( 'id' => 'none',      'label' => 'No hardware',                      'price' => 0,  'enabled' => true ),
+            array( 'id' => 'none',      'label' => 'No hardware',                      'price' => 0,  'enabled' => true, 'isDefault' => true ),
             array( 'id' => 'rosettes',  'label' => 'Hand Cast Bronze Rosettes (+$25)',  'price' => 25, 'enabled' => true ),
             array( 'id' => 'standoffs', 'label' => 'Stainless Standoffs (+$18)',        'price' => 18, 'enabled' => true ),
         );

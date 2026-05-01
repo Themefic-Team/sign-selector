@@ -20,21 +20,22 @@ const toArray = (val) => (Array.isArray(val) ? val : [])
 const normalizeShapeId = (val) => (typeof val === 'string' ? val.trim().toLowerCase() : '')
 const normalizeStyleId = (val) => (typeof val === 'string' ? val.trim().toLowerCase() : '')
 
-const stepDefinitions      = toArray(cfg.steps)
-const signStyles           = toArray(cfg.signStyles)
-const allShapes            = toArray(cfg.shapes).map(s => ({
+const stepDefinitions = toArray(cfg.steps)
+const signStyles = toArray(cfg.signStyles)
+const allShapes = toArray(cfg.shapes).map(s => ({
   ...s,
   basePrice: Number(s.basePrice) || 0,
   width: Number(s.width) || 0,
   height: Number(s.height) || 0,
   signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
-const addOns               = toArray(cfg.addons).map(a => ({ ...a, price: Number(a.price) || 0 }))
-const mountingHardware     = toArray(cfg.mountingHardware).map(h => ({ ...h, price: Number(h.price) || 0 }))
+const addOns = toArray(cfg.addons).map(a => ({ ...a, price: Number(a.price) || 0, isDefault: Boolean(a.isDefault) }))
+const mountingHardware = toArray(cfg.mountingHardware).map(h => ({ ...h, price: Number(h.price) || 0, isDefault: Boolean(h.isDefault) }))
 
 const allInstallationSurfaces = toArray(cfg.surfaces).map(s => ({
   ...s,
   imageUrl: s.imageUrl || '',
+  isDefault: Boolean(s.isDefault),
   signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
 
@@ -59,14 +60,15 @@ const designTemplates = toArray(cfg.designTemplates).map(t => ({
 const paintColors = toArray(cfg.paintColors).map(p => ({
   ...p,
   price: 0,
-  imageUrl: p.imageUrl || ''
+  imageUrl: p.imageUrl || '',
+  isDefault: Boolean(p.isDefault)
 }))
 
 /* ─── Flow section definitions from admin ────────────────────────────── */
 
 const flowSectionLabels = cfg.flowSections || {
   'installation-surface': 'Installation Surface',
-  'size-shape': 'Size & Shape', 
+  'size-shape': 'Size & Shape',
   'slate-color': 'Slate Color',
   'design-template': 'Design Template',
   'paint-color': 'Paint Color',
@@ -82,12 +84,38 @@ const initialConfiguration =
     : {}
 
 const resolveInitialId = (arr, candidate, fallbackId) => {
-  
+
   if (candidate && arr.some((item) => item.id === candidate)) {
     return candidate
   }
 
   return fallbackId
+}
+
+const resolveDefaultSurfaceId = (surfaces, candidate) => {
+  if (candidate && surfaces.some((item) => item.id === candidate)) {
+    return candidate
+  }
+
+  const defaultSurface = surfaces.find(s => s.isDefault)
+  if (defaultSurface) {
+    return defaultSurface.id
+  }
+
+  return surfaces[0]?.id || ''
+}
+
+const resolveDefaultPaintId = (paints, candidate) => {
+  if (candidate && paints.some((item) => item.id === candidate)) {
+    return candidate
+  }
+
+  const defaultPaint = paints.find(p => p.isDefault)
+  if (defaultPaint) {
+    return defaultPaint.id
+  }
+
+  return paints[0]?.id || ''
 }
 
 const getTemplatesForSelection = (shapeId, signStyleId, ignoreShape = false) => {
@@ -176,20 +204,23 @@ export const useSignSelectorState = () => {
   const initialShapes = getShapesForSignStyle(initialSignStyleId)
   const initialShapeId = resolveInitialId(initialShapes, initialConfiguration?.sign?.shape?.id, initialShapes[0]?.id || '')
   const initialSurfaces = getSurfacesForSignStyle(initialSignStyleId)
-  const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId)
+  const initialSurfaceId = resolveDefaultSurfaceId(initialSurfaces, initialConfiguration?.sign?.surface?.id)
+  const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId);
+
 
   const state = reactive({
     currentStep: 1,
     signStyleId: initialConfiguration?.sign?.style?.id || '',
-    surfaceId: initialConfiguration?.sign?.surface?.id || '',
+    surfaceId: initialSurfaceId,
     shapeId: initialConfiguration?.sign?.shape?.id || '',
     slateColorId: initialConfiguration?.sign?.slateColor?.id || '',
     templateId: initialConfiguration?.sign?.template?.id || '',
-    paintColorId: initialConfiguration?.sign?.paintColor?.id || '',
-    addOnIds: Array.isArray(initialConfiguration?.sign?.addOns)
+    paintColorId: resolveDefaultPaintId(paintColors, initialConfiguration?.sign?.paintColor?.id),
+    addOnIds: Array.isArray(initialConfiguration?.sign?.addOns) && initialConfiguration.sign.addOns.length > 0
       ? initialConfiguration.sign.addOns.map(a => a.id).filter(Boolean)
-      : [],
-    hardwareId: initialConfiguration?.sign?.hardware?.id || '',
+      : addOns.filter(a => a.isDefault).map(a => a.id),
+    hardwareId: initialConfiguration?.sign?.hardware?.id || (mountingHardware.find(h => h.isDefault)?.id || ''),
+    requireProof: initialConfiguration?.checkout?.requireProof || false,
     firstLine: initialConfiguration?.checkout?.firstLine || '',
     secondLine: initialConfiguration?.checkout?.secondLine || '',
     topText: initialConfiguration?.checkout?.topText || '',
@@ -255,38 +286,38 @@ export const useSignSelectorState = () => {
   const preview = computed(() => ({
     surfaceStyle: {
       backgroundImage: selectedSurface.value.imageUrl
-        ? `linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), url("${selectedSurface.value.imageUrl}")`
+        ? `url("${selectedSurface.value.imageUrl}")`
         : 'linear-gradient(130deg, #d9c9a8, #e8dcc3 45%, #cab48d 80%)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
+      backgroundSize: '150%',
+      backgroundPosition: 'top left',
       backgroundRepeat: 'no-repeat'
     },
     signStyle: {
       backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
       backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)
-        ? `linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
+        ? `url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
         : 'none',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       color: selectedPaintColor.value.hex,
-      boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
+      // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
     },
     textStyle: selectedPaintColor.value.imageUrl
       ? {
-          color: selectedPaintColor.value.hex,
-          backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          textShadow: 'none'
-        }
+        color: selectedPaintColor.value.hex,
+        backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        textShadow: 'none'
+      }
       : {
-          color: selectedPaintColor.value.hex
-        }
+        color: selectedPaintColor.value.hex
+      }
   }))
 
   const payload = computed(() => ({
@@ -316,6 +347,7 @@ export const useSignSelectorState = () => {
       topText: state.topText,
       houseNumber: state.houseNumber,
       bottomText: state.bottomText,
+      requireProof: state.requireProof,
       editCartItemKey: state.editCartItemKey,
       createdAt: new Date().toISOString()
     }
@@ -372,7 +404,7 @@ export const useSignSelectorState = () => {
     }
 
     if (!matchingSurfaces.some((item) => item.id === state.surfaceId)) {
-      state.surfaceId = matchingSurfaces[0].id
+      state.surfaceId = resolveDefaultSurfaceId(matchingSurfaces, '')
     }
   })
 

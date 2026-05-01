@@ -127,8 +127,8 @@ const slateColors = [
 const designTemplates = [
   { id: 'tpl-01', label: 'Deluxe #01', tier: 'Deluxe', previewText: '183', accentText: 'EAST STREET', price: 0 },
   { id: 'tpl-02', label: 'Deluxe #02', tier: 'Deluxe', previewText: '27', accentText: 'PINE LANE', price: 0 },
-  { id: 'tpl-03', label: 'Standard #03', tier: 'Standard', previewText: '52', accentText: 'HILL ROAD', price: 0 },
-  { id: 'tpl-04', label: 'Standard #04', tier: 'Standard', previewText: '860', accentText: 'LAKE DRIVE', price: 0 }
+  { id: 'tpl-03', label: 'Regular #03', tier: 'Regular', previewText: '52', accentText: 'HILL ROAD', price: 0 },
+  { id: 'tpl-04', label: 'Regular #04', tier: 'Regular', previewText: '860', accentText: 'LAKE DRIVE', price: 0 }
 ]
 
 const paintColors = [
@@ -232,19 +232,19 @@ export const useSignSelectorState = () => {
     },
     textStyle: selectedPaintColor.value.imageUrl
       ? {
-          color: selectedPaintColor.value.hex,
-          backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          textShadow: 'none'
-        }
+        color: selectedPaintColor.value.hex,
+        backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        textShadow: 'none'
+      }
       : {
-          color: selectedPaintColor.value.hex
-        }
+        color: selectedPaintColor.value.hex
+      }
   }))
 
   const payload = computed(() => ({

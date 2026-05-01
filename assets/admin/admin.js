@@ -217,12 +217,12 @@
   const ALL_FLOW_SECTIONS = (typeof SIGN_SELECTOR_ADMIN !== 'undefined' && SIGN_SELECTOR_ADMIN.flowSections)
     ? Object.entries(SIGN_SELECTOR_ADMIN.flowSections).map(([id, label]) => ({ id, label }))
     : [
-        { id: 'installation-surface', label: 'Installation Surface' },
-        { id: 'size-shape', label: 'Size & Shape' },
-        { id: 'slate-color', label: 'Slate Color' },
-        { id: 'design-template', label: 'Design Template' },
-        { id: 'paint-color', label: 'Paint Color' },
-      ];
+      { id: 'installation-surface', label: 'Installation Surface' },
+      { id: 'size-shape', label: 'Size & Shape' },
+      { id: 'slate-color', label: 'Slate Color' },
+      { id: 'design-template', label: 'Design Template' },
+      { id: 'paint-color', label: 'Paint Color' },
+    ];
 
   const defaultFlow = ALL_FLOW_SECTIONS.map(s => s.id);
 
@@ -455,6 +455,11 @@
 
     const updateField = (index, field, value) => {
       const next = [...items];
+      if (field === 'isDefault' && value === true) {
+        next.forEach((item, i) => {
+          if (i !== index) item.isDefault = false;
+        });
+      }
       next[index] = { ...next[index], [field]: value };
       setItems(next);
     };
@@ -503,7 +508,8 @@
         image: '',
         imageUrl: '',
         signStyleIds: signStyleOptions.map((style) => style.id),
-        enabled: true
+        enabled: true,
+        isDefault: false
       }];
       setItems(nextItems);
       setIsAddingSurface(true);
@@ -558,7 +564,10 @@
               ),
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
-                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Surface', 'sign-selector')),
+                  el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Surface', 'sign-selector')),
+                    item.isDefault && el('span', { className: 'ss-status-pill', style: { background: '#e0f2fe', color: '#0369a1', fontSize: '10px', padding: '2px 6px', lineHeight: '1' } }, __('Default', 'sign-selector'))
+                  ),
                   el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
@@ -599,6 +608,10 @@
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              ),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Is Default', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].isDefault === true, onChange: (v) => updateField(editingIndex, 'isDefault', v) })
               )
             ),
             el('div', { className: 'ss-template-options-section' },
@@ -837,7 +850,7 @@
             height: shape.height
           }));
         setShapeOptions(options);
-      }).catch(() => {});
+      }).catch(() => { });
     }, []);
 
     const updateField = (index, field, value) => {
@@ -897,9 +910,9 @@
       }
 
       const shape = shapeOptions.find((s) => s.id === shapeId);
-      if (!shape) return shapeId; 
+      if (!shape) return shapeId;
 
-      return shape.id + ` ( ` + shape.label  + ` )` ;
+      return shape.id + ` ( ` + shape.label + ` )`;
     };
 
     const getVisibleShapeIds = (item) => {
@@ -1083,7 +1096,7 @@
           .map((shape) => ({ id: shape.id, label: shape.label || shape.id }));
 
         setShapeOptions([{ id: 'all', label: __('All Shapes', 'sign-selector') }, { id: 'none', label: __('No Shape', 'sign-selector') }, ...options]);
-      }).catch(() => {});
+      }).catch(() => { });
 
       apiFetch({ path: '/sign-selector/v1/sign-styles' }).then((data) => {
         const options = (Array.isArray(data) ? data : [])
@@ -1091,7 +1104,7 @@
           .map((style) => ({ id: style.id, label: style.label || style.id }));
 
         setSignStyleOptions(options);
-      }).catch(() => {});
+      }).catch(() => { });
     }, []);
 
     const updateField = (index, field, value) => {
@@ -1456,12 +1469,17 @@
 
     const updateField = (index, field, value) => {
       const next = [...items];
+      if (field === 'isDefault' && value === true) {
+        next.forEach((item, i) => {
+          if (i !== index) item.isDefault = false;
+        });
+      }
       next[index] = { ...next[index], [field]: value };
       setItems(next);
     };
 
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', hex: '#ffffff', price: 0, image: '', imageUrl: '', enabled: true }];
+      const nextItems = [...items, { id: uid(), label: '', hex: '#ffffff', price: 0, image: '', imageUrl: '', enabled: true, isDefault: false }];
       setItems(nextItems);
       setIsAddingPaint(true);
       setEditingIndex(nextItems.length - 1);
@@ -1504,7 +1522,10 @@
               el('td', null, el('div', { className: 'ss-color-preview', style: { backgroundColor: item.hex || '#ccc' } })),
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
-                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Paint', 'sign-selector')),
+                  el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Paint', 'sign-selector')),
+                    item.isDefault && el('span', { className: 'ss-status-pill', style: { background: '#e0f2fe', color: '#0369a1', fontSize: '10px', padding: '2px 6px', lineHeight: '1' } }, __('Default', 'sign-selector'))
+                  ),
                   el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
@@ -1545,6 +1566,10 @@
             el('div', { className: 'ss-template-enabled-row' },
               el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
               el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Is Default', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].isDefault === true, onChange: (v) => updateField(editingIndex, 'isDefault', v) })
             )
           ),
           el('div', { className: 'ss-modal-actions' },
@@ -1576,7 +1601,7 @@
     };
 
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true }];
+      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true, isDefault: false }];
       setItems(nextItems);
       setIsAddingAddon(true);
       setEditingIndex(nextItems.length - 1);
@@ -1613,7 +1638,10 @@
             el('tr', { key: i },
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
-                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Add-on', 'sign-selector')),
+                  el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Add-on', 'sign-selector')),
+                    item.isDefault && el('span', { className: 'ss-status-pill', style: { background: '#e0f2fe', color: '#0369a1', fontSize: '10px', padding: '2px 6px', lineHeight: '1' } }, __('Default', 'sign-selector'))
+                  ),
                   el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
@@ -1648,6 +1676,10 @@
             el('div', { className: 'ss-template-enabled-row' },
               el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
               el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Is Default', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].isDefault === true, onChange: (v) => updateField(editingIndex, 'isDefault', v) })
             )
           ),
           el('div', { className: 'ss-modal-actions' },
@@ -1673,13 +1705,18 @@
 
     const updateField = (index, field, value) => {
       const next = [...items];
+      if (field === 'isDefault' && value === true) {
+        next.forEach((item, i) => {
+          if (i !== index) item.isDefault = false;
+        });
+      }
       const parsed = field === 'price' ? Number(value) || 0 : value;
       next[index] = { ...next[index], [field]: parsed };
       setItems(next);
     };
 
     const addItem = () => {
-      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true }];
+      const nextItems = [...items, { id: uid(), label: '', price: 0, enabled: true, isDefault: false }];
       setItems(nextItems);
       setIsAddingHardware(true);
       setEditingIndex(nextItems.length - 1);
@@ -1716,7 +1753,10 @@
             el('tr', { key: i },
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
-                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Hardware', 'sign-selector')),
+                  el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Hardware', 'sign-selector')),
+                    item.isDefault && el('span', { className: 'ss-status-pill', style: { background: '#e0f2fe', color: '#0369a1', fontSize: '10px', padding: '2px 6px', lineHeight: '1' } }, __('Default', 'sign-selector'))
+                  ),
                   el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
@@ -1751,6 +1791,10 @@
             el('div', { className: 'ss-template-enabled-row' },
               el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
               el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Is Default', 'sign-selector')),
+              el(Toggle, { checked: items[editingIndex].isDefault === true, onChange: (v) => updateField(editingIndex, 'isDefault', v) })
             )
           ),
           el('div', { className: 'ss-modal-actions' },
@@ -1769,15 +1813,15 @@
   /* ─── App shell ───────────────────────────────────────── */
 
   const TABS = [
-    { key: 'steps',      label: __('Steps', 'sign-selector'),          component: StepsTab },
-    { key: 'styles',     label: __('Sign Styles', 'sign-selector'),    component: SignStylesTab },
-    { key: 'surfaces',   label: __('Surfaces', 'sign-selector'),       component: SurfacesTab },
-    { key: 'shapes',     label: __('Shapes & Sizes', 'sign-selector'), component: ShapesTab },
-    { key: 'slates',     label: __('Slate Colors', 'sign-selector'),   component: SlateColorsTab },
-    { key: 'templates',  label: __('Templates', 'sign-selector'),      component: DesignTemplatesTab },
-    { key: 'paints',     label: __('Paint Colors', 'sign-selector'),   component: PaintColorsTab },
-    { key: 'addons',     label: __('Add-ons', 'sign-selector'),        component: AddonsTab },
-    { key: 'hardware',   label: __('Hardware', 'sign-selector'),       component: MountingHardwareTab },
+    { key: 'steps', label: __('Steps', 'sign-selector'), component: StepsTab },
+    { key: 'styles', label: __('Sign Styles', 'sign-selector'), component: SignStylesTab },
+    { key: 'surfaces', label: __('Surfaces', 'sign-selector'), component: SurfacesTab },
+    { key: 'shapes', label: __('Shapes & Sizes', 'sign-selector'), component: ShapesTab },
+    { key: 'slates', label: __('Slate Colors', 'sign-selector'), component: SlateColorsTab },
+    { key: 'templates', label: __('Templates', 'sign-selector'), component: DesignTemplatesTab },
+    { key: 'paints', label: __('Paint Colors', 'sign-selector'), component: PaintColorsTab },
+    { key: 'addons', label: __('Add-ons', 'sign-selector'), component: AddonsTab },
+    { key: 'hardware', label: __('Hardware', 'sign-selector'), component: MountingHardwareTab },
   ];
 
   const App = () => {
