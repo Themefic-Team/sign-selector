@@ -51,8 +51,9 @@ class SignSelector {
             add_filter( 'woocommerce_get_item_data', [ $this, 'render_cart_item_meta' ], 10, 2 );
             add_action( 'woocommerce_before_calculate_totals', [ $this, 'apply_sign_selector_cart_price' ], 20 );
             add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'add_order_item_meta' ], 10, 4 );
-            add_filter( 'woocommerce_cart_item_name', [ $this, 'append_edit_item_link' ], 10, 3 );
             add_filter( 'woocommerce_checkout_cart_item_quantity', [ $this, 'remove_checkout_item_quantity' ], 10, 3 );
+            add_filter( 'woocommerce_default_address_fields', [ $this, 'rename_checkout_address_fields' ] );
+            add_filter( 'woocommerce_get_country_locale', [ $this, 'override_country_locale_fields' ] );
         }
     }
 
@@ -437,6 +438,47 @@ class SignSelector {
         }
 
         return $quantity_html;
+    }
+
+    /**
+     * Rename default checkout address fields.
+     */
+    public function rename_checkout_address_fields( $fields ) {
+        if ( isset( $fields['state'] ) ) {
+            $fields['state']['label'] = __( 'Province/State', 'sign-selector' );
+        }
+        if ( isset( $fields['postcode'] ) ) {
+            $fields['postcode']['label'] = __( 'Postal Code/ ZIP', 'sign-selector' );
+        }
+        return $fields;
+    }
+
+    /**
+     * Ensure country-specific locales don't override our custom labels.
+     */
+    public function override_country_locale_fields( $locales ) {
+        foreach ( $locales as $country => $fields ) {
+            if ( isset( $locales[ $country ]['state'] ) && isset( $locales[ $country ]['state']['label'] ) ) {
+                $locales[ $country ]['state']['label'] = __( 'Province/State', 'sign-selector' );
+            }
+            if ( isset( $locales[ $country ]['postcode'] ) && isset( $locales[ $country ]['postcode']['label'] ) ) {
+                $locales[ $country ]['postcode']['label'] = __( 'Postal Code/ ZIP', 'sign-selector' );
+            }
+        }
+        
+        if ( ! isset( $locales['US'] ) ) {
+            $locales['US'] = array();
+        }
+        $locales['US']['state']['label']    = __( 'Province/State', 'sign-selector' );
+        $locales['US']['postcode']['label'] = __( 'Postal Code/ ZIP', 'sign-selector' );
+        
+        if ( ! isset( $locales['CA'] ) ) {
+            $locales['CA'] = array();
+        }
+        $locales['CA']['state']['label']    = __( 'Province/State', 'sign-selector' );
+        $locales['CA']['postcode']['label'] = __( 'Postal Code/ ZIP', 'sign-selector' );
+
+        return $locales;
     }
 
     /**

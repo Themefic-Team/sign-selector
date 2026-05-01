@@ -2434,6 +2434,12 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .preview-sign.round .preview-template-overlay {
 	background-size: 105% !important;
 }
+.preview-sign.oval .preview-template-overlay {
+	background-size: 102% !important;
+}
+.preview-no-shape-sign .preview-template-overlay {
+	background-size: 102% !important;
+}
 
 .proof-section {
   background: var(--bg);
