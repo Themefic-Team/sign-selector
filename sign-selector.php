@@ -51,6 +51,7 @@ class SignSelector {
             add_filter( 'woocommerce_get_item_data', [ $this, 'render_cart_item_meta' ], 10, 2 );
             add_action( 'woocommerce_before_calculate_totals', [ $this, 'apply_sign_selector_cart_price' ], 20 );
             add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'add_order_item_meta' ], 10, 4 );
+            add_filter( 'woocommerce_cart_item_name', [ $this, 'append_edit_item_link' ], 10, 3 );
             add_filter( 'woocommerce_checkout_cart_item_quantity', [ $this, 'remove_checkout_item_quantity' ], 10, 3 );
             add_filter( 'woocommerce_default_address_fields', [ $this, 'rename_checkout_address_fields' ] );
             add_filter( 'woocommerce_get_country_locale', [ $this, 'override_country_locale_fields' ] );
