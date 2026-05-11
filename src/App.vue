@@ -963,16 +963,26 @@ const onSubmit = async () => {
           <div ref="previewCaptureRef" class="preview-canvas" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+                <div class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
+              </div>
+              <div v-else class="preview-placeholder">
+                Select surface to show preview
               </div>
             </template>
           </div> 
+          
           <ul class="summary-list">
             <li class="summary-item"><span>Shape &amp; Size: <strong>{{ selectedShape.label }}</strong></span><strong>${{ (selectedShape.basePrice || 0).toFixed(2) }}</strong></li>
             <li class="summary-item"><span>Slate Color: <strong>{{ selectedSlateColor.label }}</strong></span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
