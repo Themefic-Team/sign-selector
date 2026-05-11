@@ -44,7 +44,8 @@ const slateColors = toArray(cfg.slateColors).map(item => ({
   price: Number(item.price) || 0,
   shapeIds: Array.isArray(item.shapeIds) ? item.shapeIds.map(normalizeShapeId).filter(Boolean) : null,
   images: item.images || {},
-  imageUrl: item.imageUrl || (item.images && item.images.default) || ''
+  imageUrl: item.imageUrl || (item.images && item.images.default) || '',
+  isDefault: Boolean(item.isDefault)
 }))
 
 const designTemplates = toArray(cfg.designTemplates).map(t => ({
@@ -102,7 +103,20 @@ const resolveDefaultSurfaceId = (surfaces, candidate) => {
     return defaultSurface.id
   }
 
-  return surfaces[0]?.id || ''
+  return ''
+}
+
+const resolveDefaultSlateColorId = (slates, candidate) => {
+  if (candidate && slates.some((item) => item.id === candidate)) {
+    return candidate
+  }
+
+  const defaultSlate = slates.find(s => s.isDefault)
+  if (defaultSlate) {
+    return defaultSlate.id
+  }
+
+  return ''
 }
 
 const resolveDefaultPaintId = (paints, candidate) => {
@@ -206,21 +220,22 @@ export const useSignSelectorState = () => {
   const initialSurfaces = getSurfacesForSignStyle(initialSignStyleId)
   const initialSurfaceId = resolveDefaultSurfaceId(initialSurfaces, initialConfiguration?.sign?.surface?.id)
   const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId);
-
-
+  const initialSlateColors = getSlateColorsForShape(initialShapeId)
+  const initialSlateColorId = resolveDefaultSlateColorId(initialSlateColors, initialConfiguration?.sign?.slateColor?.id)
+ 
   const state = reactive({
     currentStep: 1,
     signStyleId: initialConfiguration?.sign?.style?.id || '',
     surfaceId: initialSurfaceId,
     shapeId: initialConfiguration?.sign?.shape?.id || '',
-    slateColorId: initialConfiguration?.sign?.slateColor?.id || '',
+    slateColorId: initialSlateColorId,
     templateId: initialConfiguration?.sign?.template?.id || '',
     paintColorId: resolveDefaultPaintId(paintColors, initialConfiguration?.sign?.paintColor?.id),
     addOnIds: Array.isArray(initialConfiguration?.sign?.addOns) && initialConfiguration.sign.addOns.length > 0
       ? initialConfiguration.sign.addOns.map(a => a.id).filter(Boolean)
       : addOns.filter(a => a.isDefault).map(a => a.id),
     hardwareId: initialConfiguration?.sign?.hardware?.id || (mountingHardware.find(h => h.isDefault)?.id || ''),
-    requireProof: initialConfiguration?.checkout?.requireProof || false,
+    requireProof: initialConfiguration?.checkout?.requireProof || '',
     firstLine: initialConfiguration?.checkout?.firstLine || '',
     secondLine: initialConfiguration?.checkout?.secondLine || '',
     topText: initialConfiguration?.checkout?.topText || '',
@@ -287,9 +302,9 @@ export const useSignSelectorState = () => {
     surfaceStyle: {
       backgroundImage: selectedSurface.value.imageUrl
         ? `url("${selectedSurface.value.imageUrl}")`
-        : 'linear-gradient(130deg, #d9c9a8, #e8dcc3 45%, #cab48d 80%)',
-      backgroundSize: '150%',
-      backgroundPosition: 'top left',
+        : 'none',
+      backgroundSize: '160% auto',
+      backgroundPosition: 'left -78px',
       backgroundRepeat: 'no-repeat'
     },
     signStyle: {
@@ -379,8 +394,8 @@ export const useSignSelectorState = () => {
       state.templateId = ''
     }
 
-    if (state.slateColorId && !availableSlateColors.value.some((item) => item.id === state.slateColorId)) {
-      state.slateColorId = ''
+    if (!availableSlateColors.value.some((item) => item.id === state.slateColorId)) {
+      state.slateColorId = resolveDefaultSlateColorId(availableSlateColors.value, '')
     }
   })
 

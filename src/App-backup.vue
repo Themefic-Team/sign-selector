@@ -232,48 +232,22 @@ const noShapePreviewStyle = computed(() => ({
   height: 'auto'
 }))
 
-const templateWrapperStyle = computed(() => {
-  return {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    borderRadius: 'inherit',
-    mixBlendMode: 'screen',
-    isolation: 'isolate'
-  }
-})
-
-const paintBackgroundStyle = computed(() => {
-  const paintTextureUrl = selectedPaintColor.value?.imageUrl || ''
-  return {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    borderRadius: 'inherit',
-    backgroundColor: 'rgb(236, 230, 205)',
-    backgroundImage: paintTextureUrl ? `url("${paintTextureUrl}")` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  }
-})
-
-const templateDesignStyle = computed(() => {
+const templateOverlayStyle = computed(() => {
   if (!templateImageUrl.value) return {}
+
+  const paintTextureUrl = selectedPaintColor.value?.imageUrl || ''
+  const hasTexture = Boolean(paintTextureUrl)
+
   return {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    borderRadius: 'inherit',
-    backgroundImage: `url("${templateImageUrl.value}")`,
-    backgroundSize: 'contain',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    mixBlendMode: 'multiply',
-    filter: 'drop-shadow(rgba(76, 76, 76, 0.85) 1px 1px 0px) drop-shadow(rgba(0, 0, 0, 0) 2px 3px 4px) drop-shadow(rgba(255, 255, 255, 0.3) -0.5px -0.5px 0px)'
+    backgroundColor: selectedPaintColor.value?.hex || '#f2f4ef',
+    backgroundImage: hasTexture
+      ? `url(${templateImageUrl.value}), url(${paintTextureUrl})`
+      : `url(${templateImageUrl.value})`,
+    backgroundSize: hasTexture ? 'contain, cover' : 'contain',
+    backgroundPosition: hasTexture ? 'center, center' : 'center',
+    backgroundRepeat: hasTexture ? 'no-repeat, no-repeat' : 'no-repeat',
+    backgroundBlendMode: hasTexture ? 'multiply, normal' : 'multiply',
+    mixBlendMode: 'screen'
   }
 })
 
@@ -674,19 +648,13 @@ const onSubmit = async () => {
           <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <div class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
-                  <div class="preview-template-overlay" :style="templateDesignStyle" />
-                </div>
+                <div class="preview-template-overlay" :style="templateOverlayStyle" />
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
-                  <div class="preview-template-overlay" :style="templateDesignStyle" />
-                </div>
+                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
               </div>
               <div v-else class="preview-placeholder">
                 Select surface to show preview
@@ -855,25 +823,16 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <div class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
-                  <div class="preview-template-overlay" :style="templateDesignStyle" />
-                </div>
+                <div class="preview-template-overlay" :style="templateOverlayStyle" />
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
-                  <div class="preview-template-overlay" :style="templateDesignStyle" />
-                </div>
-              </div>
-              <div v-else class="preview-placeholder">
-                Select surface to show preview
+                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
               </div>
             </template>
           </div>
@@ -1382,7 +1341,6 @@ const onSubmit = async () => {
   font-size: 16px; 
   font-weight: 600;
   line-height: 160%; /* 25.6px */
-  text-shadow: 0px 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .panel-style-subtitle {

@@ -1018,6 +1018,10 @@
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              ),
+              el('div', { className: 'ss-template-enabled-row', style: { marginTop: '8px' } },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Default', 'sign-selector')),
+                el(Toggle, { checked: Boolean(items[editingIndex].isDefault), onChange: (v) => updateField(editingIndex, 'isDefault', v) })
               )
             ),
             el('div', { className: 'ss-template-options-section ss-slate-shapes-section' },

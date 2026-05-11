@@ -12,6 +12,8 @@
     "axios": "^1.15.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
+    "pixi-filters": "^6.1.5",
+    "pixi.js": "^8.18.1",
     "select2": "^4.1.0-rc.0",
     "vue": "^3.5.31"
   },
