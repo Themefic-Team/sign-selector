@@ -78,17 +78,9 @@
       setTimeout(() => setToast({ message: '', type: '' }), 3000);
     };
 
-    const getRequestUrl = () => {
-      const route = endpoint.replace('/sign-selector/v1', '');
-      return SIGN_SELECTOR_ADMIN.restBase.replace(/\/$/, '') + route;
-    };
-
     const load = useCallback(() => {
       setLoading(true);
-      apiFetch({ 
-        url: getRequestUrl(),
-        headers: { 'X-WP-Nonce': SIGN_SELECTOR_ADMIN.nonce }
-      }).then(data => {
+      apiFetch({ path: endpoint }).then(data => {
         setItems(Array.isArray(data) ? data : []);
         setLoading(false);
       }).catch(() => {
@@ -102,9 +94,8 @@
     const save = useCallback((data) => {
       const toSave = data || items;
       return apiFetch({
-        url: getRequestUrl(),
+        path: endpoint,
         method: 'POST',
-        headers: { 'X-WP-Nonce': SIGN_SELECTOR_ADMIN.nonce },
         data: toSave,
       }).then(saved => {
         setItems(saved);

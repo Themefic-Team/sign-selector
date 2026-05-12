@@ -308,7 +308,7 @@ export const useSignSelectorState = () => {
       backgroundRepeat: 'no-repeat'
     },
     signStyle: {
-      backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
+      // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
       backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)
         ? `url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
         : 'none',

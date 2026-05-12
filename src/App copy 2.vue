@@ -240,8 +240,7 @@ const templateWrapperStyle = computed(() => {
     height: '100%',
     borderRadius: 'inherit',
     mixBlendMode: 'screen',
-    isolation: 'isolate',
-    overflow: 'hidden'
+    isolation: 'isolate'
   }
 })
 
@@ -257,8 +256,7 @@ const paintBackgroundStyle = computed(() => {
     backgroundImage: paintTextureUrl ? `url("${paintTextureUrl}")` : 'none',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat', 
-    clipPath: 'inset(1%)',
+    backgroundRepeat: 'no-repeat',
   }
 })
 
@@ -275,8 +273,7 @@ const templateDesignStyle = computed(() => {
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
     mixBlendMode: 'multiply',
-    clipPath: 'inset(1%)',
-    filter: 'drop-shadow(rgba(255, 255, 255, 0.4) -0.5px -0.5px 0px) drop-shadow(rgba(0, 0, 0, 0.15) 1px 1px 1px)'
+    filter: 'drop-shadow(rgba(76, 76, 76, 0.85) 1px 1px 0px) drop-shadow(rgba(0, 0, 0, 0) 2px 3px 4px) drop-shadow(rgba(255, 255, 255, 0.3) -0.5px -0.5px 0px)'
   }
 })
 
