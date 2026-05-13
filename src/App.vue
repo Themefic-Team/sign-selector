@@ -785,7 +785,7 @@ const onSubmit = async () => {
                 class="tile template-tile"
                   :disabled="!canSelectTemplateStep3"
                 :class="{ selected: state.templateId === item.id }"
-                @click="selectChoiceAndAutoAdvance('templateId', item.id)"
+                 @click="state.templateId = item.id"
               >
                 <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
                 <!-- <span>{{ item.label }}</span> -->
