@@ -225,12 +225,34 @@ watch(templateImageUrl, (url) => {
   img.src = url
 }, { immediate: true })
 
-const noShapePreviewStyle = computed(() => ({
-  ...preview.value.signStyle,
-  aspectRatio: `${templateNaturalSize.value.width} / ${templateNaturalSize.value.height}`,
-  width: 'min(100%, 280px)',
-  height: 'auto'
-}))
+const noShapePreviewStyle = computed(() => {
+  const tWidth = templateNaturalSize.value.width || 1;
+  const tHeight = templateNaturalSize.value.height || 1;
+  const isVertical = tHeight > tWidth;
+  const label = selectedTemplate.value?.label?.toLowerCase() || '';
+  const isOval = label.includes('oval');
+  const isArched = label.includes('arch');
+
+  let maxWidth = '280px';
+  if (isVertical && isOval) {
+    maxWidth = '210px'; // Reduce width to prevent excessive height for vertical ovals
+  }
+
+  let borderRadius = '6px';
+  if (isOval) {
+    borderRadius = '50%';
+  } else if (isArched) {
+    borderRadius = '50% 50% 0 0';
+  }
+
+  return {
+    ...preview.value.signStyle,
+    aspectRatio: `${tWidth} / ${tHeight}`,
+    width: `min(100%, ${maxWidth})`,
+    height: 'auto',
+    borderRadius
+  };
+})
 
 const templateWrapperStyle = computed(() => {
   return {
@@ -786,7 +808,7 @@ const onSubmit = async () => {
                 class="swatch slate-card"
                 :disabled="!canSelectSlateStep3"
                 :class="{ selected: state.slateColorId === item.id }"
-                @click="selectChoiceAndAutoAdvance('slateColorId', item.id)"
+                @click="state.slateColorId = item.id"
               >
                 <span
                   class="swatch-chip slate-chip"
