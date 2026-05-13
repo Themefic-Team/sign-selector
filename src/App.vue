@@ -674,7 +674,7 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
@@ -685,7 +685,7 @@ const onSubmit = async () => {
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
                 <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle" />
                   <div class="preview-template-overlay" :style="templateDesignStyle" />
@@ -858,7 +858,7 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
@@ -869,7 +869,7 @@ const onSubmit = async () => {
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
                 <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle" />
                   <div class="preview-template-overlay" :style="templateDesignStyle" />
@@ -963,7 +963,7 @@ const onSubmit = async () => {
         </div>
         <aside class="preview-card summary-card">
           <header class="order-summary-header">Order Summary</header>
-          <div ref="previewCaptureRef" class="preview-canvas" :style="preview.surfaceStyle">
+          <div ref="previewCaptureRef" class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
@@ -974,7 +974,7 @@ const onSubmit = async () => {
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
                 <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle" />
                   <div class="preview-template-overlay" :style="templateDesignStyle" />
@@ -2593,5 +2593,17 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 }
 .select2-selection__rendered {
 	margin: 0 !important;
+}
+.preview-sign.rectangle.green {
+	background-size: 111% !important;
+}
+.preview-sign.oval.mottle-black {
+	background-size: 106% !important;
+}
+.preview-sign.oval.mottle-black {
+	background-size: 114% !important;
+}
+.preview-sign.arched.green {
+	background-size: 112% !important;
 }
 </style>
