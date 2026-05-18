@@ -2570,13 +2570,14 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   white-space: nowrap !important;
 }
 
-.preview-canvas.arch {
+/* comment for future */
+/* .preview-canvas.arch {
 	background-size: 105% !important;
-}
+} */
 
-.preview-canvas.round {
+/* .preview-canvas.round {
 	background-size: 125% !important;
-}
+} */
 .preview-sign.round .preview-template-overlay {
 	background-size: 105% !important;
 }

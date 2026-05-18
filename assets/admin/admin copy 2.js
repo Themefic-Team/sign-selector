@@ -444,17 +444,6 @@
   const SurfacesTab = () => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/surfaces');
     const { items: signStyles, loading: signStylesLoading } = useCollection('/sign-selector/v1/sign-styles');
-    const [shapeOptions, setShapeOptions] = useState([]);
-
-    useEffect(() => {
-      apiFetch({ path: '/sign-selector/v1/shapes' }).then((data) => {
-        const options = (Array.isArray(data) ? data : [])
-          .filter((shape) => shape && shape.id)
-          .map((shape) => ({ id: shape.id, label: shape.label || shape.id }));
-        setShapeOptions(options);
-      }).catch(() => { });
-    }, []);
-
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
     const [editingIndex, setEditingIndex] = useState(null);
     const [isAddingSurface, setIsAddingSurface] = useState(false);
@@ -472,14 +461,6 @@
         });
       }
       next[index] = { ...next[index], [field]: value };
-      setItems(next);
-    };
-
-    const updateShapeImage = (index, shapeId, url) => {
-      const next = [...items];
-      const images = { ...(next[index].images || {}) };
-      images[shapeId] = url;
-      next[index] = { ...next[index], images };
       setItems(next);
     };
 
@@ -526,7 +507,6 @@
         label: '',
         image: '',
         imageUrl: '',
-        images: {},
         signStyleIds: signStyleOptions.map((style) => style.id),
         enabled: true,
         isDefault: false
@@ -620,7 +600,7 @@
               el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Default Image URL', 'sign-selector')),
+              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
               el('div', { className: 'ss-img-cell' },
                 el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
                 el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
@@ -644,28 +624,6 @@
                     onChange: (e) => toggleSignStyle(editingIndex, style.id, e.target.checked)
                   }),
                   style.label
-                )
-              )
-            ),
-            el('div', { className: 'ss-template-options-section ss-slate-images-section', style: { gridColumn: 'span 2' } },
-              el('h4', null, __('Shape-specific Images', 'sign-selector')),
-              el('div', { className: 'ss-shape-images-grid' },
-                shapeOptions.map(shape =>
-                  el('div', { className: 'ss-shape-img-item', key: shape.id },
-                    el('label', { className: 'ss-template-field-label' }, shape.label || shape.id),
-                    items[editingIndex].images && items[editingIndex].images[shape.id]
-                      ? el('img', { className: 'ss-img-preview', src: items[editingIndex].images[shape.id], alt: shape.id })
-                      : null,
-                    el('div', { className: 'ss-img-cell' },
-                      el('input', {
-                        className: 'ss-input',
-                        value: (items[editingIndex].images && items[editingIndex].images[shape.id]) || '',
-                        onChange: (e) => updateShapeImage(editingIndex, shape.id, e.target.value),
-                        placeholder: __('Image URL', 'sign-selector')
-                      }),
-                      el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(editingIndex, shape.id, url)) }, __('Browse', 'sign-selector'))
-                    )
-                  )
                 )
               )
             )

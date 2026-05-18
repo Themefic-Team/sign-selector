@@ -34,7 +34,8 @@ const mountingHardware = toArray(cfg.mountingHardware).map(h => ({ ...h, price: 
 
 const allInstallationSurfaces = toArray(cfg.surfaces).map(s => ({
   ...s,
-  imageUrl: s.imageUrl || '',
+  images: s.images || {},
+  imageUrl: s.imageUrl || (s.images && s.images.default) || '',
   isDefault: Boolean(s.isDefault),
   signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
@@ -197,6 +198,19 @@ const getSlateColorImageUrl = (slateColor, shapeId) => {
   return slateColor.imageUrl || shapeImages.default || ''
 }
 
+const getSurfaceImageUrl = (surface, shapeId) => {
+  if (!surface || typeof surface !== 'object') return ''
+
+  const normalizedShapeId = normalizeShapeId(shapeId)
+  const shapeImages = surface.images && typeof surface.images === 'object' ? surface.images : {}
+
+  if (normalizedShapeId && shapeImages[normalizedShapeId]) {
+    return shapeImages[normalizedShapeId]
+  }
+
+  return surface.imageUrl || shapeImages.default || ''
+}
+
 const getSlateColorsForShape = (shapeId) => {
   const normalizedShapeId = normalizeShapeId(shapeId)
 
@@ -300,11 +314,13 @@ export const useSignSelectorState = () => {
 
   const preview = computed(() => ({
     surfaceStyle: {
-      backgroundImage: selectedSurface.value.imageUrl
-        ? `url("${selectedSurface.value.imageUrl}")`
+      backgroundImage: getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)
+        ? `url("${getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)}")`
         : 'none',
-      backgroundSize: '160% auto',
-      backgroundPosition: 'left -78px',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      // backgroundSize: '160% auto',
+      // backgroundPosition: 'left -78px',
       backgroundRepeat: 'no-repeat'
     },
     signStyle: {
@@ -511,6 +527,7 @@ export const useSignSelectorState = () => {
     preview,
     payload,
     getSlateColorImageUrl,
+    getSurfaceImageUrl,
     isFirstStep: computed(() => state.currentStep === 1),
     isLastStep: computed(() => state.currentStep === totalSteps.value),
     setStep,
