@@ -1877,7 +1877,7 @@ const onSubmit = async () => {
 
 .preview-canvas {
   border-radius: 10px;
-  min-height: 275px; 
+  min-height: 293px; 
   /* width: 400px; */
   display: grid;
   place-items: center;
@@ -2313,7 +2313,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   width: min(100%, 280px);
   height: auto;
   border-radius: 10px;
-  border: 2px solid rgba(0, 0, 0, 0.18);
+  /* border: 2px solid rgba(0, 0, 0, 0.18); */
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
@@ -2630,7 +2630,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	background-size: 112% !important;
 }
 .preview-sign.round {
-	height: 242px !important;
+	height: 260px !important;
 }
 .preview-sign {
 	filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.64));
