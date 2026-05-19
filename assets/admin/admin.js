@@ -1472,6 +1472,15 @@
               },
                 shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
               ),
+              el('label', { className: 'ss-template-field-label' }, __('Surface Background Variant', 'sign-selector')),
+              el('select', {
+                className: 'ss-input',
+                value: items[editingTemplateIndex].surfaceVariant || '',
+                onChange: (e) => updateField(editingTemplateIndex, 'surfaceVariant', e.target.value)
+              },
+                el('option', { value: '' }, __('Default (Based on Shape)', 'sign-selector')),
+                shapeOptions.filter(s => s.id !== 'all' && s.id !== 'none').map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+              ),
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingTemplateIndex].enabled !== false, onChange: (v) => updateField(editingTemplateIndex, 'enabled', v) })

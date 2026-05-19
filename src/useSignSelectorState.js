@@ -56,6 +56,7 @@ const designTemplates = toArray(cfg.designTemplates).map(t => ({
   textLayout: typeof t.textLayout === 'string' ? t.textLayout : '',
   fields: Array.isArray(t.fields) ? t.fields : [],
   shapeId: normalizeShapeId(t.shapeId) || 'all',
+  surfaceVariant: typeof t.surfaceVariant === 'string' ? t.surfaceVariant : '',
   signStyleIds: Array.isArray(t.signStyleIds) ? t.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
 
@@ -313,44 +314,47 @@ export const useSignSelectorState = () => {
     )
   })
 
-  const preview = computed(() => ({
-    surfaceStyle: {
-      backgroundImage: getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)
-        ? `url("${getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)}")`
-        : 'none',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      // backgroundSize: '160% auto',
-      // backgroundPosition: 'left -78px',
-      backgroundRepeat: 'no-repeat'
-    },
-    signStyle: {
-      // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
-      backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)
-        ? `url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
-        : 'none',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      color: selectedPaintColor.value.hex,
-      // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
-    },
-    textStyle: selectedPaintColor.value.imageUrl
-      ? {
-        color: selectedPaintColor.value.hex,
-        backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+  const preview = computed(() => {
+    const shapeIdForBg = selectedTemplate.value?.surfaceVariant || selectedShape.value.id || ''
+    return {
+      surfaceStyle: {
+        backgroundImage: getSurfaceImageUrl(selectedSurface.value, shapeIdForBg)
+          ? `url("${getSurfaceImageUrl(selectedSurface.value, shapeIdForBg)}")`
+          : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        // backgroundSize: '160% auto',
+        // backgroundPosition: 'left -78px',
+        backgroundRepeat: 'no-repeat'
+      },
+      signStyle: {
+        // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
+        backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, shapeIdForBg)
+          ? `url("${getSlateColorImageUrl(selectedSlateColor.value, shapeIdForBg)}")`
+          : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        textShadow: 'none'
-      }
-      : {
-        color: selectedPaintColor.value.hex
-      }
-  }))
+        color: selectedPaintColor.value.hex,
+        // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
+      },
+      textStyle: selectedPaintColor.value.imageUrl
+        ? {
+          color: selectedPaintColor.value.hex,
+          backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          textShadow: 'none'
+        }
+        : {
+          color: selectedPaintColor.value.hex
+        }
+    }
+  })
 
   const payload = computed(() => ({
     sign: {

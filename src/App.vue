@@ -2629,7 +2629,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .preview-sign.arched.green {
 	background-size: 112% !important;
 }
-.preview-sign.round.black {
+.preview-sign.round {
 	height: 242px !important;
 }
 .preview-sign {
