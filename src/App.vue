@@ -439,7 +439,7 @@ const getSlateChipStyle = (shape, imageUrl) => ({
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? 'min(100%, 180px)' : shape?.id === 'oval' || shape?.id === 'rectangle' ? 'min(100%, 300px)' : 'min(100%, 350px)',
+  width: shape?.id === 'round' ? 'min(100%, 180px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : 'min(100%, 365px)',
   minHeight: 'auto' 
 })
 
