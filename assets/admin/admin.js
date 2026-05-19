@@ -699,6 +699,11 @@
 
     const updateField = (index, field, value) => {
       const next = [...items];
+      if (field === 'isDefault' && value === true) {
+        next.forEach((item, i) => {
+          if (i !== index) item.isDefault = false;
+        });
+      }
       const parsed = (field === 'width' || field === 'height' || field === 'basePrice') ? Number(value) || 0 : value;
       next[index] = { ...next[index], [field]: parsed };
       setItems(next);
@@ -749,7 +754,8 @@
         height: 5,
         basePrice: 0,
         signStyleIds: signStyleOptions.map((style) => style.id),
-        enabled: true
+        enabled: true,
+        isDefault: false
       }];
       setItems(nextItems);
       setIsAddingShape(true);
@@ -800,7 +806,10 @@
             el('tr', { key: i },
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
-                  el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Shape', 'sign-selector')),
+                  el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    el('strong', { className: 'ss-template-title' }, item.label || __('Untitled Shape', 'sign-selector')),
+                    item.isDefault && el('span', { className: 'ss-status-pill', style: { background: '#e0f2fe', color: '#0369a1', fontSize: '10px', padding: '2px 6px', lineHeight: '1' } }, __('Default', 'sign-selector'))
+                  ),
                   el('span', { className: 'ss-template-id' }, item.id || __('No ID', 'sign-selector'))
                 )
               ),
@@ -844,6 +853,10 @@
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+              ),
+              el('div', { className: 'ss-template-enabled-row' },
+                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Is Default', 'sign-selector')),
+                el(Toggle, { checked: items[editingIndex].isDefault === true, onChange: (v) => updateField(editingIndex, 'isDefault', v) })
               )
             ),
             el('div', { className: 'ss-template-options-section' },

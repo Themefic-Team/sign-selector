@@ -27,6 +27,7 @@ const allShapes = toArray(cfg.shapes).map(s => ({
   basePrice: Number(s.basePrice) || 0,
   width: Number(s.width) || 0,
   height: Number(s.height) || 0,
+  isDefault: Boolean(s.isDefault),
   signStyleIds: Array.isArray(s.signStyleIds) ? s.signStyleIds.map(normalizeStyleId).filter(Boolean) : null
 }))
 const addOns = toArray(cfg.addons).map(a => ({ ...a, price: Number(a.price) || 0, isDefault: Boolean(a.isDefault) }))
@@ -92,6 +93,19 @@ const resolveInitialId = (arr, candidate, fallbackId) => {
   }
 
   return fallbackId
+}
+
+const resolveDefaultShapeId = (shapes, candidate) => {
+  if (candidate && shapes.some((item) => item.id === candidate)) {
+    return candidate
+  }
+
+  const defaultShape = shapes.find(s => s.isDefault)
+  if (defaultShape) {
+    return defaultShape.id
+  }
+
+  return ''
 }
 
 const resolveDefaultSurfaceId = (surfaces, candidate) => {
@@ -195,7 +209,11 @@ const getSlateColorImageUrl = (slateColor, shapeId) => {
     return shapeImages[normalizedShapeId]
   }
 
-  return slateColor.imageUrl || shapeImages.default || ''
+  if (slateColor.imageUrl) return slateColor.imageUrl
+  if (shapeImages.default) return shapeImages.default
+
+  const firstAvailable = Object.values(shapeImages).find(url => typeof url === 'string' && url.trim() !== '')
+  return firstAvailable || ''
 }
 
 const getSurfaceImageUrl = (surface, shapeId) => {
@@ -203,13 +221,16 @@ const getSurfaceImageUrl = (surface, shapeId) => {
 
   const normalizedShapeId = normalizeShapeId(shapeId)
   const shapeImages = surface.images && typeof surface.images === 'object' ? surface.images : {}
- 
 
   if (normalizedShapeId && shapeImages[normalizedShapeId]) {
     return shapeImages[normalizedShapeId]
   }
 
-  return shapeImages['rectangle'] || surface.imageUrl || ''
+  if (surface.imageUrl) return surface.imageUrl
+  if (shapeImages.default) return shapeImages.default
+
+  const firstAvailable = Object.values(shapeImages).find(url => typeof url === 'string' && url.trim() !== '')
+  return firstAvailable || ''
 }
 
 const getSlateColorsForShape = (shapeId) => {
@@ -231,7 +252,7 @@ const getSlateColorsForShape = (shapeId) => {
 export const useSignSelectorState = () => {
   const initialSignStyleId = resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || '')
   const initialShapes = getShapesForSignStyle(initialSignStyleId)
-  const initialShapeId = resolveInitialId(initialShapes, initialConfiguration?.sign?.shape?.id, initialShapes[0]?.id || '')
+  const initialShapeId = resolveDefaultShapeId(initialShapes, initialConfiguration?.sign?.shape?.id)
   const initialSurfaces = getSurfacesForSignStyle(initialSignStyleId)
   const initialSurfaceId = resolveDefaultSurfaceId(initialSurfaces, initialConfiguration?.sign?.surface?.id)
   const initialTemplates = getTemplatesForSelection(initialShapeId, initialSignStyleId);
@@ -242,7 +263,7 @@ export const useSignSelectorState = () => {
     currentStep: 1,
     signStyleId: initialConfiguration?.sign?.style?.id || '',
     surfaceId: initialSurfaceId,
-    shapeId: initialConfiguration?.sign?.shape?.id || '',
+    shapeId: initialShapeId,
     slateColorId: initialSlateColorId,
     templateId: initialConfiguration?.sign?.template?.id || '',
     paintColorId: resolveDefaultPaintId(paintColors, initialConfiguration?.sign?.paintColor?.id),
@@ -265,7 +286,16 @@ export const useSignSelectorState = () => {
   const shapes = computed(() => getShapesForSignStyle(state.signStyleId))
   const installationSurfaces = computed(() => getSurfacesForSignStyle(state.signStyleId))
   const availableSlateColors = computed(() => getSlateColorsForShape(state.shapeId))
-  const selectedSurface = computed(() => state.surfaceId ? (installationSurfaces.value.find(i => i.id === state.surfaceId) || {}) : {})
+  const selectedSurface = computed(() => {
+    if (state.surfaceId) {
+      return (
+        installationSurfaces.value.find(i => i.id === state.surfaceId) ||
+        allInstallationSurfaces.find(i => i.id === state.surfaceId) ||
+        {}
+      )
+    }
+    return allInstallationSurfaces[0] || {}
+  })
   const selectedShape = computed(() => state.shapeId ? (shapes.value.find(i => i.id === state.shapeId) || {}) : {})
   const selectedSlateColor = computed(() => state.slateColorId ? (availableSlateColors.value.find(i => i.id === state.slateColorId) || { price: 0, images: {}, imageUrl: '', hex: '' }) : { price: 0, images: {}, imageUrl: '', hex: '' })
   const availableDesignTemplates = computed(() => {
@@ -313,44 +343,46 @@ export const useSignSelectorState = () => {
     )
   })
 
-  const preview = computed(() => ({
-    surfaceStyle: {
-      backgroundImage: getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)
-        ? `url("${getSurfaceImageUrl(selectedSurface.value, selectedShape.value.id)}")`
-        : 'none',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      // backgroundSize: '160% auto',
-      // backgroundPosition: 'left -78px',
-      backgroundRepeat: 'no-repeat'
-    },
-    signStyle: {
-      // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
-      backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)
-        ? `url("${getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id)}")`
-        : 'none',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      color: selectedPaintColor.value.hex,
-      // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
-    },
-    textStyle: selectedPaintColor.value.imageUrl
-      ? {
-        color: selectedPaintColor.value.hex,
-        backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+  const preview = computed(() => {
+    const defaultShape = shapes.value.find(s => s.isDefault) || allShapes.find(s => s.isDefault)
+    const currentShapeId = selectedShape.value?.id || defaultShape?.id || ''
+    const surfaceImgUrl = getSurfaceImageUrl(selectedSurface.value, currentShapeId)
+    const slateImgUrl = getSlateColorImageUrl(selectedSlateColor.value, currentShapeId)
+    return {
+      surfaceStyle: {
+        backgroundImage: surfaceImgUrl ? `url("${surfaceImgUrl}")` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        // backgroundSize: '160% auto',
+        // backgroundPosition: 'left -78px',
+        backgroundRepeat: 'no-repeat'
+      },
+      signStyle: {
+        // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
+        backgroundImage: slateImgUrl ? `url("${slateImgUrl}")` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        textShadow: 'none'
-      }
-      : {
-        color: selectedPaintColor.value.hex
-      }
-  }))
+        color: selectedPaintColor.value.hex,
+        // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
+      },
+      textStyle: selectedPaintColor.value.imageUrl
+        ? {
+          color: selectedPaintColor.value.hex,
+          backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          textShadow: 'none'
+        }
+        : {
+          color: selectedPaintColor.value.hex
+        }
+    }
+  })
 
   const payload = computed(() => ({
     sign: {
@@ -420,9 +452,8 @@ export const useSignSelectorState = () => {
     if (!state.signStyleId) return
     const matchingShapes = shapes.value
 
-    // Only clear shapeId if it is no longer valid — never auto-select
-    if (state.shapeId && !matchingShapes.some((item) => item.id === state.shapeId)) {
-      state.shapeId = ''
+    if (!matchingShapes.some((item) => item.id === state.shapeId)) {
+      state.shapeId = resolveDefaultShapeId(matchingShapes, '')
     }
   })
 
