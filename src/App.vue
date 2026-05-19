@@ -235,7 +235,7 @@ const noShapePreviewStyle = computed(() => {
 
   let maxWidth = '280px';
   if (isVertical && isOval) {
-    maxWidth = '210px'; // Reduce width to prevent excessive height for vertical ovals
+    maxWidth = '170px'; // Reduce width to prevent excessive height for vertical ovals
   }
 
   let borderRadius = '6px';
@@ -439,7 +439,7 @@ const getSlateChipStyle = (shape, imageUrl) => ({
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? 'min(100%, 180px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : 'min(100%, 365px)',
+  width: shape?.id === 'round' ? 'min(100%, 170px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : 'min(100%, 365px)',
   minHeight: 'auto' 
 })
 
@@ -1877,8 +1877,8 @@ const onSubmit = async () => {
 
 .preview-canvas {
   border-radius: 10px;
-  min-height: 293px; 
-  /* width: 400px; */
+  height: 280px; 
+  width: 417px;
   display: grid;
   place-items: center;
   border: 1px solid #d4d3de;
@@ -2579,7 +2579,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	background-size: 125% !important;
 } */
 .preview-sign.round .preview-template-overlay {
-	background-size: 105% !important;
+	background-size: 100% !important;
 }
 .preview-sign.oval .preview-template-overlay {
 	background-size: 102% !important;
@@ -2630,7 +2630,10 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	background-size: 112% !important;
 }
 .preview-sign.round {
-	height: 260px !important;
+	height: 240px !important;
+}
+.preview-canvas {
+	max-width: 416px !important;
 }
 .preview-sign {
 	filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.64));
