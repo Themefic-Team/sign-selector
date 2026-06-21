@@ -225,49 +225,78 @@ watch(templateImageUrl, (url) => {
   img.src = url
 }, { immediate: true })
 
-const noShapePreviewStyle = computed(() => ({
-  ...preview.value.signStyle,
-  aspectRatio: `${templateNaturalSize.value.width} / ${templateNaturalSize.value.height}`,
-  width: 'min(100%, 280px)',
-  height: 'auto'
-}))
+const noShapePreviewStyle = computed(() => {
+  const tWidth = templateNaturalSize.value.width || 1;
+  const tHeight = templateNaturalSize.value.height || 1;
+  const isVertical = tHeight > tWidth;
+  const label = selectedTemplate.value?.label?.toLowerCase() || '';
+  const isOval = label.includes('oval');
+  const isArched = label.includes('arch');
 
-const templateOverlayStyle = computed(() => {
-  if (!templateImageUrl.value) return {}
+  let maxWidth = '280px';
+  if (isVertical && isOval) {
+    maxWidth = '170px'; // Reduce width to prevent excessive height for vertical ovals
+  }
 
-  const slateTextureUrl = getSlateColorImageUrl(selectedSlateColor.value, selectedShape.value.id) || ''
-  const hasSlateTexture = Boolean(slateTextureUrl)
-  const slateColor = selectedSlateColor.value?.hex || '#2b3239'
+  let borderRadius = '6px';
+  if (isOval) {
+    borderRadius = '50%';
+  } else if (isArched) {
+    borderRadius = '50% 50% 0 0';
+  }
 
   return {
-    objectPosition: '-10000px',
-    backgroundColor: slateColor,
-    backgroundImage: hasSlateTexture ? `url(${slateTextureUrl})` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    maskImage: `url(${templateImageUrl.value})`,
-    maskSize: 'contain',
-    maskPosition: 'center',
-    maskRepeat: 'no-repeat',
-    WebkitMaskImage: `url(${templateImageUrl.value})`,
-    WebkitMaskSize: 'contain',
-    WebkitMaskPosition: 'center',
-    WebkitMaskRepeat: 'no-repeat',
+    ...preview.value.signStyle,
+    aspectRatio: `${tWidth} / ${tHeight}`,
+    width: `min(100%, ${maxWidth})`,
+    height: 'auto',
+    borderRadius
+  };
+})
+
+const templateWrapperStyle = computed(() => {
+  return {
+    position: 'absolute',
+    inset: 0,
     width: '100%',
-    height: '100%'
+    height: '100%',
+    borderRadius: 'inherit',
+    mixBlendMode: 'screen',
+    isolation: 'isolate',
+    overflow: 'hidden'
   }
 })
 
-const overriddenSignStyle = computed(() => {
+const paintBackgroundStyle = computed(() => {
   const paintTextureUrl = selectedPaintColor.value?.imageUrl || ''
-  const hasPaintTexture = Boolean(paintTextureUrl)
-  
   return {
-    ...preview.value.signStyle,
-    backgroundColor: selectedPaintColor.value?.hex || '#f2f4ef',
-    backgroundImage: hasPaintTexture ? `url(${paintTextureUrl})` : 'none',
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: 'rgb(236, 230, 205)',
+    backgroundImage: paintTextureUrl ? `url("${paintTextureUrl}")` : 'none',
     backgroundSize: 'cover',
-    backgroundPosition: 'center'
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  }
+})
+
+const templateDesignStyle = computed(() => {
+  if (!templateImageUrl.value) return {}
+  return {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundImage: `url("${templateImageUrl.value}")`,
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    mixBlendMode: 'multiply',
+    filter: 'contrast(1.08) drop-shadow(rgba(0, 0, 0, 0.3) 1px 2px 2px)',
   }
 })
 
@@ -408,7 +437,7 @@ const getSlateChipStyle = (shape, imageUrl) => ({
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? 'min(100%, 180px)' : shape?.id === 'oval' || shape?.id === 'rectangle' ? 'min(100%, 300px)' : 'min(100%, 350px)',
+  width: shape?.id === 'round' ? 'min(100%, 170px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : 'min(100%, 365px)',
   minHeight: 'auto' 
 })
 
@@ -440,8 +469,7 @@ const onSubmit = async () => {
 
 <template>
   <section class="selector-root">
-    <div class="tf-selector-shell"> 
-      <img class="template-preview-image-custom" :src="$pluginDirectoryUrl + 'assets/images/template/arch/deluxe/13.png'" alt="">
+    <div class="tf-selector-shell">
       <ul class="tf-stepper" aria-label="Sign setup steps">
         <li
           v-for="(sd, idx) in stepDefinitions"
@@ -666,16 +694,22 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+                <div class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
               </div>
               <div v-else class="preview-placeholder">
                 Select surface to show preview
@@ -749,7 +783,7 @@ const onSubmit = async () => {
                 class="tile template-tile"
                   :disabled="!canSelectTemplateStep3"
                 :class="{ selected: state.templateId === item.id }"
-                @click="selectChoiceAndAutoAdvance('templateId', item.id)"
+                 @click="state.templateId = item.id"
               >
                 <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="template-thumb" />
                 <!-- <span>{{ item.label }}</span> -->
@@ -772,7 +806,7 @@ const onSubmit = async () => {
                 class="swatch slate-card"
                 :disabled="!canSelectSlateStep3"
                 :class="{ selected: state.slateColorId === item.id }"
-                @click="selectChoiceAndAutoAdvance('slateColorId', item.id)"
+                @click="state.slateColorId = item.id"
               >
                 <span
                   class="swatch-chip slate-chip"
@@ -844,16 +878,25 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <img :src="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+                <div class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[overriddenSignStyle, getPreviewShapeStyle(selectedShape)]">
-                <img v-if="templateImageUrl" :src="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
+              </div>
+              <div v-else class="preview-placeholder">
+                Select surface to show preview
               </div>
             </template>
           </div>
@@ -940,19 +983,29 @@ const onSubmit = async () => {
         </div>
         <aside class="preview-card summary-card">
           <header class="order-summary-header">Order Summary</header>
-          <div ref="previewCaptureRef" class="preview-canvas" :style="preview.surfaceStyle">
+          <div ref="previewCaptureRef" class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <div class="preview-template-overlay" :style="templateOverlayStyle" />
+                <div class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="selectedShape.id" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <div v-if="templateImageUrl" class="preview-template-overlay" :style="templateOverlayStyle" />
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+                <div v-if="templateImageUrl" class="preview-template-wrapper" :style="templateWrapperStyle">
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-template-overlay" :style="templateDesignStyle" />
+                </div>
+              </div>
+              <div v-else class="preview-placeholder">
+                Select surface to show preview
               </div>
             </template>
           </div> 
+          
           <ul class="summary-list">
             <li class="summary-item"><span>Shape &amp; Size: <strong>{{ selectedShape.label }}</strong></span><strong>${{ (selectedShape.basePrice || 0).toFixed(2) }}</strong></li>
             <li class="summary-item"><span>Slate Color: <strong>{{ selectedSlateColor.label }}</strong></span><strong>${{ selectedSlateColor.price.toFixed(2) }}</strong></li>
@@ -1003,11 +1056,6 @@ const onSubmit = async () => {
   color: var(--ink);
   padding: 32px 16px;
 }
-
-/* .template-preview-image-custom {
-  filter: brightness(0) saturate(100%) invert(21%) sepia(100%) saturate(7414%) hue-rotate(359deg) brightness(94%) contrast(117%)
-          drop-shadow(0 10px 15px rgba(0, 0, 0, 0.25));
-} */
 
 /* ── Stepper ─────────────────────────────────────── */
 .tf-stepper {
@@ -1367,6 +1415,7 @@ const onSubmit = async () => {
   font-size: 16px; 
   font-weight: 600;
   line-height: 160%; /* 25.6px */
+  text-shadow: 0px 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .panel-style-subtitle {
@@ -1496,6 +1545,7 @@ const onSubmit = async () => {
   border-radius: 50%;
 }
 
+.shape-preview.oval_cottage,
 .shape-preview.arch {
   border-radius: 50%;
 }
@@ -1653,6 +1703,7 @@ const onSubmit = async () => {
   border-radius: 50%;
 }
 
+.slate-chip.oval_cottage,
 .slate-chip.arch {
   border-radius: 50%;
 }
@@ -1826,8 +1877,8 @@ const onSubmit = async () => {
 
 .preview-canvas {
   border-radius: 10px;
-  min-height: 275px; 
-  /* width: 400px; */
+  height: 280px; 
+  width: 417px;
   display: grid;
   place-items: center;
   border: 1px solid #d4d3de;
@@ -1842,11 +1893,18 @@ const onSubmit = async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center; 
+  align-items: center;
   color: #f8f2d8;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
-  -webkit-box-shadow: 5px 5px 9px 1px rgba(0,0,0,0.56); 
-box-shadow: 5px 5px 9px 1px rgba(0,0,0,0.56);
+}
+
+.preview-sign::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.38), inset 0 3px 8px rgba(0, 0, 0, 0.18), inset 0 -2px 5px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .preview-sign.oval_cottage,
@@ -1858,6 +1916,7 @@ box-shadow: 5px 5px 9px 1px rgba(0,0,0,0.56);
   border-radius: 4px;
 }
 
+.preview-sign.oval_cottage,
 .preview-sign.arch {
   border-radius: 50%;
 }
@@ -2264,9 +2323,18 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   width: min(100%, 280px);
   height: auto;
   border-radius: 10px;
-  border: 2px solid rgba(0, 0, 0, 0.18);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+}
+
+.preview-no-shape-sign::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.38), inset 0 3px 8px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .preview-no-template,
@@ -2521,15 +2589,16 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   white-space: nowrap !important;
 }
 
-.preview-canvas.arch {
+/* comment for future */
+/* .preview-canvas.arch {
 	background-size: 105% !important;
-}
+} */
 
-.preview-canvas.round {
+/* .preview-canvas.round {
 	background-size: 125% !important;
-}
+} */
 .preview-sign.round .preview-template-overlay {
-	background-size: 105% !important;
+	background-size: 100% !important;
 }
 .preview-sign.oval .preview-template-overlay {
 	background-size: 102% !important;
@@ -2566,5 +2635,86 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 }
 .select2-selection__rendered {
 	margin: 0 !important;
+}
+.preview-sign.rectangle.green {
+	background-size: 111% !important;
+}
+.preview-sign.arch,
+.preview-sign.oval_cottage  {
+	background-size: 101% !important;
+}
+.preview-sign.oval.mottle-black {
+	background-size: 106% !important;
+}
+.preview-sign.oval.mottle-black {
+	background-size: 114% !important;
+}
+.preview-sign.arched.green {
+	background-size: 112% !important;
+}
+.preview-sign.round {
+	height: 240px !important;
+}
+.preview-canvas {
+	max-width: 416px !important;
+}
+.preview-sign {
+  /* filter: drop-shadow(0px 5px 12px rgba(0, 0, 0, 0.75)) drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.55)); */
+}
+
+
+
+.sign-selector-app {
+  margin: 110px 0;
+}
+.selector-root {
+	background: transparent !important;
+}
+.tf-step-btn {
+  box-shadow: none;
+}
+.tf-primary-btn, .ghost-btn {
+	padding: 10px 20px !important;
+}
+
+#order_review_heading,
+#order_review {
+  background: #fff;
+}
+
+.variation {
+  line-height: 2;
+}
+
+.woocommerce-js td.product-name dl.variation dt {
+  font-weight: 700;
+}
+/* .preview-sign {
+	background-size: 120% !important;
+} */
+.swatch-chip.slate-chip.rectangle {
+	background-size: 120% !important;
+}
+.swatch-chip {
+	border: none !important;
+}
+.swatch-chip.slate-chip.arch,
+.swatch-chip.slate-chip.oval_cottage {
+	background-size: 120% !important;
+}
+.swatch-chip.slate-chip {
+	background-size: 120% !important;
+	aspect-ratio: 13 / 10 !important;
+}
+.swatch-chip.slate-chip.arch,
+.swatch-chip.slate-chip.oval_cottage {
+	aspect-ratio: 24 / 12 !important;
+}
+
+.swatch-chip.slate-chip.round{
+	aspect-ratio: 9 / 13 !important;
+}
+.preview-no-shape-sign {
+	background-size: 200% !important;
 }
 </style>

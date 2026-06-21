@@ -750,6 +750,7 @@
       const nextItems = [...items, {
         id: uid(),
         label: '',
+        shapeLabel: '',
         width: 10,
         height: 5,
         basePrice: 0,
@@ -844,6 +845,8 @@
               el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+              el('label', { className: 'ss-template-field-label' }, __('Shape Label', 'sign-selector')),
+              el('input', { className: 'ss-input', value: items[editingIndex].shapeLabel || '', placeholder: 'e.g. Oval, Rectangle', onChange: (e) => updateField(editingIndex, 'shapeLabel', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Width', 'sign-selector')),
               el('input', { className: 'ss-input', type: 'number', value: items[editingIndex].width ?? 0, onChange: (e) => updateField(editingIndex, 'width', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Height', 'sign-selector')),
@@ -1314,6 +1317,7 @@
         fields: ['houseNumber'],
         textLayout: 'number',
         imageUrl: '',
+        svgCode: '',
         enabled: true
       }];
 
@@ -1366,9 +1370,11 @@
           paginatedTemplateEntries.map(({ item, index }) =>
             el('tr', { key: item.id || index },
               el('td', null,
-                item.imageUrl
-                  ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label || item.id || 'Template preview' })
-                  : el('div', { className: 'ss-img-preview ss-img-preview-empty' })
+                item.svgCode && item.svgCode.trim()
+                  ? el('div', { className: 'ss-img-preview ss-svg-template-preview', dangerouslySetInnerHTML: { __html: item.svgCode } })
+                  : item.imageUrl
+                    ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label || item.id || 'Template preview' })
+                    : el('div', { className: 'ss-img-preview ss-img-preview-empty' })
               ),
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
@@ -1433,7 +1439,11 @@
           el('div', { className: 'ss-template-form-grid' },
             el('div', { className: 'ss-template-options-section' },
               el('h4', null, __('Basic Details', 'sign-selector')),
-              items[editingTemplateIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingTemplateIndex].imageUrl, alt: items[editingTemplateIndex].label || 'Template preview' }) : null,
+              items[editingTemplateIndex].svgCode && items[editingTemplateIndex].svgCode.trim()
+                ? el('div', { className: 'ss-img-preview ss-template-modal-preview ss-svg-template-preview', dangerouslySetInnerHTML: { __html: items[editingTemplateIndex].svgCode } })
+                : items[editingTemplateIndex].imageUrl
+                  ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingTemplateIndex].imageUrl, alt: items[editingTemplateIndex].label || 'Template preview' })
+                  : null,
               el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
               el('div', { className: 'ss-img-cell' },
                 el('input', {
@@ -1443,6 +1453,14 @@
                 }),
                 el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingTemplateIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
               ),
+              el('label', { className: 'ss-template-field-label' }, __('SVG Code (overrides image when provided)', 'sign-selector')),
+              el('textarea', {
+                className: 'ss-input ss-svg-textarea',
+                rows: 6,
+                placeholder: '<svg ...>...</svg>',
+                value: items[editingTemplateIndex].svgCode || '',
+                onChange: (e) => updateField(editingTemplateIndex, 'svgCode', e.target.value)
+              }),
               el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
               el('input', {
                 className: 'ss-input',

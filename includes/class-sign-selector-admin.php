@@ -202,20 +202,35 @@ class Sign_Selector_Admin {
                     // Allow URLs through
                     if ( filter_var( $value, FILTER_VALIDATE_URL ) ) {
                         $clean[ $safe_key ] = esc_url_raw( $value );
-                    } elseif ( $safe_key === 'icon' && strpos( trim( $value ), '<' ) === 0 ) {
-                        // Allow inline SVG for the icon field.
+                    } elseif ( in_array( $safe_key, array( 'icon', 'svgCode' ), true ) && strpos( trim( $value ), '<' ) === 0 ) {
+                        // Allow inline SVG for icon and svgCode fields.
                         $svg_allowed = array(
-                            'svg'    => array( 'xmlns' => true, 'viewBox' => true, 'viewbox' => true, 'width' => true, 'height' => true, 'fill' => true, 'class' => true, 'style' => true, 'aria-hidden' => true ),
-                            'path'   => array( 'd' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true, 'stroke-linecap' => true, 'stroke-linejoin' => true, 'fill-rule' => true, 'clip-rule' => true, 'opacity' => true ),
-                            'circle' => array( 'cx' => true, 'cy' => true, 'r' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true ),
-                            'rect'   => array( 'x' => true, 'y' => true, 'width' => true, 'height' => true, 'rx' => true, 'ry' => true, 'fill' => true, 'stroke' => true ),
-                            'line'   => array( 'x1' => true, 'y1' => true, 'x2' => true, 'y2' => true, 'stroke' => true, 'stroke-width' => true ),
+                            'svg'      => array( 'xmlns' => true, 'viewBox' => true, 'viewbox' => true, 'width' => true, 'height' => true, 'fill' => true, 'class' => true, 'style' => true, 'aria-hidden' => true, 'preserveAspectRatio' => true ),
+                            'path'     => array( 'd' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true, 'stroke-linecap' => true, 'stroke-linejoin' => true, 'fill-rule' => true, 'clip-rule' => true, 'opacity' => true, 'transform' => true ),
+                            'circle'   => array( 'cx' => true, 'cy' => true, 'r' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true, 'opacity' => true ),
+                            'ellipse'  => array( 'cx' => true, 'cy' => true, 'rx' => true, 'ry' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true, 'opacity' => true, 'transform' => true ),
+                            'rect'     => array( 'x' => true, 'y' => true, 'width' => true, 'height' => true, 'rx' => true, 'ry' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true, 'opacity' => true ),
+                            'line'     => array( 'x1' => true, 'y1' => true, 'x2' => true, 'y2' => true, 'stroke' => true, 'stroke-width' => true ),
                             'polyline' => array( 'points' => true, 'fill' => true, 'stroke' => true, 'stroke-width' => true ),
                             'polygon'  => array( 'points' => true, 'fill' => true, 'stroke' => true ),
-                            'g'      => array( 'fill' => true, 'stroke' => true, 'transform' => true, 'opacity' => true ),
-                            'defs'   => array(),
+                            'text'     => array( 'x' => true, 'y' => true, 'text-anchor' => true, 'dominant-baseline' => true, 'font-family' => true, 'font-size' => true, 'font-weight' => true, 'fill' => true, 'opacity' => true, 'transform' => true, 'letter-spacing' => true ),
+                            'tspan'    => array( 'x' => true, 'y' => true, 'dy' => true, 'font-size' => true, 'font-weight' => true, 'fill' => true ),
+                            'g'        => array( 'fill' => true, 'stroke' => true, 'transform' => true, 'opacity' => true, 'id' => true, 'clip-path' => true, 'filter' => true ),
+                            'defs'     => array(),
                             'clipPath' => array( 'id' => true ),
-                            'use'    => array( 'href' => true, 'xlink:href' => true ),
+                            'use'      => array( 'href' => true, 'xlink:href' => true, 'x' => true, 'y' => true, 'width' => true, 'height' => true ),
+                            'image'    => array( 'href' => true, 'xlink:href' => true, 'x' => true, 'y' => true, 'width' => true, 'height' => true, 'preserveAspectRatio' => true, 'clip-path' => true ),
+                            'linearGradient' => array( 'id' => true, 'x1' => true, 'y1' => true, 'x2' => true, 'y2' => true, 'gradientUnits' => true ),
+                            'radialGradient' => array( 'id' => true, 'cx' => true, 'cy' => true, 'r' => true, 'gradientUnits' => true ),
+                            'stop'     => array( 'offset' => true, 'stop-color' => true, 'stop-opacity' => true, 'style' => true ),
+                            'filter'   => array( 'id' => true, 'x' => true, 'y' => true, 'width' => true, 'height' => true ),
+                            'feDropShadow'   => array( 'dx' => true, 'dy' => true, 'stdDeviation' => true, 'flood-color' => true, 'flood-opacity' => true ),
+                            'feGaussianBlur' => array( 'stdDeviation' => true, 'in' => true, 'result' => true ),
+                            'feBlend'        => array( 'in' => true, 'in2' => true, 'mode' => true ),
+                            'feComposite'    => array( 'in' => true, 'in2' => true, 'operator' => true ),
+                            'feOffset'       => array( 'dx' => true, 'dy' => true, 'in' => true, 'result' => true ),
+                            'feMerge'        => array(),
+                            'feMergeNode'    => array( 'in' => true ),
                         );
                         $clean[ $safe_key ] = wp_kses( $value, $svg_allowed );
                     } else {
@@ -355,8 +370,7 @@ class Sign_Selector_Admin {
 
     public function maybe_seed_defaults() {
         // Re-seed when the data version changes.
-        return;
-        $current_version = '16';
+        $current_version = '17';
         if ( get_option( 'sign_selector_seeded' ) === $current_version ) {
             return;
         }
@@ -410,6 +424,11 @@ class Sign_Selector_Admin {
             return isset( $shape['id'] ) ? $shape['id'] : '';
         }, $shapes ) );
 
+        // Shape IDs that exclude the large arch (12"x24") — only black/gray/green are available for arch
+        $small_shape_ids = array_values( array_filter( $all_shape_ids, function( $id ) {
+            return $id !== 'arch';
+        } ) );
+
         // Slate Colors – with shape-specific image overrides
         $slate_base_files = array(
             'black'        => 'slate_black.jpg',
@@ -438,13 +457,13 @@ class Sign_Selector_Admin {
         );
 
         $slate_colors = array(
-            array( 'id' => 'black',        'label' => 'Black',        'price' => 0,  'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'mottle-black', 'label' => 'Mottle Black', 'price' => 15, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'gray',         'label' => 'Gray',         'price' => 15, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'green',        'label' => 'Green',        'price' => 0,  'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'red',          'label' => 'Red',          'price' => 20, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'variegated',   'label' => 'Variegated',   'price' => 30, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
-            array( 'id' => 'burgundy',     'label' => 'Burgundy',     'price' => 25, 'shapeIds' => $all_shape_ids, 'enabled' => true ),
+            array( 'id' => 'black',        'label' => 'Black',        'price' => 0,  'shapeIds' => $all_shape_ids,   'enabled' => true ),
+            array( 'id' => 'mottle-black', 'label' => 'Mottle Black', 'price' => 15, 'shapeIds' => $small_shape_ids, 'enabled' => true ),
+            array( 'id' => 'gray',         'label' => 'Gray',         'price' => 15, 'shapeIds' => $all_shape_ids,   'enabled' => true ),
+            array( 'id' => 'green',        'label' => 'Green',        'price' => 0,  'shapeIds' => $all_shape_ids,   'enabled' => true ),
+            array( 'id' => 'red',          'label' => 'Red',          'price' => 20, 'shapeIds' => $small_shape_ids, 'enabled' => true ),
+            array( 'id' => 'variegated',   'label' => 'Variegated',   'price' => 30, 'shapeIds' => $small_shape_ids, 'enabled' => true ),
+            array( 'id' => 'burgundy',     'label' => 'Burgundy',     'price' => 25, 'shapeIds' => $small_shape_ids, 'enabled' => true ),
         );
 
         foreach ( $slate_colors as &$sc ) {

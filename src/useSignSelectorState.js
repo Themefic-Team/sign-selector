@@ -114,11 +114,9 @@ const resolveDefaultSlateColorId = (slates, candidate) => {
   }
 
   const defaultSlate = slates.find(s => s.isDefault)
-  if (defaultSlate) {
-    return defaultSlate.id
-  }
+  if (defaultSlate) return defaultSlate.id
 
-  return ''
+  return slates[0]?.id || ''
 }
 
 const resolveDefaultPaintId = (paints, candidate) => {
@@ -217,6 +215,12 @@ const getSlateColorsForShape = (shapeId) => {
   const normalizedShapeId = normalizeShapeId(shapeId)
 
   return slateColors.filter((item) => {
+    // If a shape is selected, require a non-empty image entry for that shape
+    if (normalizedShapeId) {
+      const shapeImages = item.images && typeof item.images === 'object' ? item.images : {}
+      if (!shapeImages[normalizedShapeId]) return false
+    }
+
     if (!Array.isArray(item.shapeIds)) {
       return true
     }
@@ -415,7 +419,8 @@ export const useSignSelectorState = () => {
       state.templateId = ''
     }
 
-    if (!availableSlateColors.value.some((item) => item.id === state.slateColorId)) {
+    const currentValid = state.slateColorId && availableSlateColors.value.some((item) => item.id === state.slateColorId)
+    if (!currentValid) {
       state.slateColorId = resolveDefaultSlateColorId(availableSlateColors.value, '')
     }
   })

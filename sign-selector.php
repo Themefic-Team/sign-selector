@@ -35,7 +35,7 @@ class SignSelector
             define('SIGN_SELECTOR_PATH', plugin_dir_path(__FILE__));
         }
         if (! defined('SIGN_SELECTOR_DEV_MODE')) {
-            define('SIGN_SELECTOR_DEV_MODE', false);
+            define('SIGN_SELECTOR_DEV_MODE', true);
         }
 
         // Admin settings

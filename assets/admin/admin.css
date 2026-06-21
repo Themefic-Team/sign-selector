@@ -130,6 +130,19 @@
   flex-wrap: wrap;
 }
 
+.ss-svg-template-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.ss-svg-template-preview svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .ss-svg-textarea {
   width: 100%;
   min-height: 40px;
