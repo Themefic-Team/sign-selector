@@ -440,7 +440,7 @@ const getSlateChipStyle = (shape, imageUrl) => ({
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? 'min(100%, 170px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : 'min(100%, 365px)',
+  width: shape?.id === 'round' ? 'min(100%, 170px)' : shape?.id === 'oval' ? 'min(100%, 310px)' :  shape?.id === 'rectangle' ? 'min(100%, 295px)' : shape?.id === 'arched' ? 'min(100%, 300px)' : 'min(100%, 365px)',
   minHeight: 'auto' 
 })
 
@@ -1948,7 +1948,7 @@ const onSubmit = async () => {
   color: #f8f2d8;
 }
 
-.preview-sign::after {
+/* .preview-sign::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1956,7 +1956,7 @@ const onSubmit = async () => {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.38), inset 0 3px 8px rgba(0, 0, 0, 0.18), inset 0 -2px 5px rgba(0, 0, 0, 0.14);
   pointer-events: none;
   z-index: 10;
-}
+} */
 
 .preview-sign.oval_cottage,
 .preview-sign.oval {
@@ -2710,7 +2710,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	max-width: 416px !important;
 }
 .preview-sign {
-  /* filter: drop-shadow(0px 5px 12px rgba(0, 0, 0, 0.75)) drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.55)); */
+  filter: drop-shadow(1px 2px 2px #000000a3);
 }
 
 
