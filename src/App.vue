@@ -820,8 +820,7 @@ const onSubmit = async () => {
                 :disabled="!canSelectSlateStep3"
                 :class="{ selected: state.slateColorId === item.id }"
                 @click="state.slateColorId = item.id"
-              >
-              {{ item }}
+              > 
                 <span
                   class="swatch-chip slate-chip"
                   :class="selectedTemplate?.shapeId || 'oval'"
@@ -2769,4 +2768,6 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .preview-no-shape-sign {
 	background-size: 200% !important;
 }
+
+ 
 </style>
