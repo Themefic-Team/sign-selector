@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useSignSelectorState } from './useSignSelectorState'
 import { vSelect2 } from './directives/vSelect2'
 
+
 const {
   stepDefinitions,
   hasSection,
@@ -212,6 +213,25 @@ const templateImageUrl = computed(() => {
   return tpl.imageUrl || ''
 })
 
+const previewSurfaceUrl = computed(() => {
+  const bgImage = preview.value.surfaceStyle?.backgroundImage || ''
+  const match = bgImage.match(/url\(["']?([^"')]+)["']?\)/)
+  return match ? match[1] : ''
+})
+
+const previewSignSlateUrl = computed(() => {
+  const bgImage = preview.value.signStyle?.backgroundImage || ''
+  const match = bgImage.match(/url\(["']?([^"')]+)["']?\)/)
+  return match ? match[1] : ''
+})
+
+const previewSignBaseStyle = computed(() => {
+  const { backgroundImage, backgroundSize, backgroundRepeat, backgroundPosition, ...rest } = preview.value.signStyle || {}
+  return rest
+})
+
+const paintTextureUrl = computed(() => selectedPaintColor.value?.imageUrl || '')
+
 const templateSvgCode = computed(() => selectedTemplate.value?.svgCode || '')
 
 // Track natural dimensions of the template image for no-shape-flow preview
@@ -270,21 +290,15 @@ const templateWrapperStyle = computed(() => {
   }
 })
 
-const paintBackgroundStyle = computed(() => {
-  const paintTextureUrl = selectedPaintColor.value?.imageUrl || ''
-  return {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    borderRadius: 'inherit',
-    backgroundColor: 'rgb(236, 230, 205)',
-    backgroundImage: paintTextureUrl ? `url("${paintTextureUrl}")` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  }
-})
+const paintBackgroundStyle = computed(() => ({
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+  borderRadius: 'inherit',
+  
+  overflow: 'hidden',
+}))
 
 const templateDesignStyle = computed(() => {
   if (!templateImageUrl.value) return {}
@@ -294,14 +308,13 @@ const templateDesignStyle = computed(() => {
     width: '100%',
     height: '100%',
     borderRadius: 'inherit',
-    backgroundImage: `url("${templateImageUrl.value}")`,
-    backgroundSize: 'contain',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
+    objectFit: 'cover',
+    objectPosition: 'center',
     mixBlendMode: 'multiply',
-    filter: 'contrast(1.08) drop-shadow(rgba(0, 0, 0, 0.3) 1px 2px 2px)',
+    filter: 'contrast(1.15) brightness(0.93) drop-shadow(1px 0px 0px #000)'
   }
 })
+
 
 const normalizeTemplateFieldKey = (value) => {
   const normalized = String(value || '').trim().toLowerCase()
@@ -428,10 +441,7 @@ const getShapeCardStyle = (shape) => ({
   marginInline: 'auto'
 })
 
-const getSlateChipStyle = (shape, imageUrl) => ({
-  backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
+const getSlateChipStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
   width: shape?.id === 'round' ? '62px' : '100%',
   height: 'auto',
@@ -540,7 +550,7 @@ const onSubmit = async () => {
                   :class="{ selected: state.surfaceId === item.id }"
                   @click="state.surfaceId = item.id"
                 >
-                  <span class="surface-thumb" :style="{ backgroundImage: `url(${item.imageUrl})` }" />
+                  <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="surface-thumb surface-thumb-img" />
                   <span class="sr-only">{{ item.label }}</span>
                   <span v-if="state.surfaceId === item.id" class="surface-check" aria-hidden="true" />
                 </button>
@@ -612,7 +622,7 @@ const onSubmit = async () => {
           <!-- Size & Shape (flow-dependent) -->
           <section v-if="!isNoShapeFlow && hasSection('size-shape')" class="panel size-panel" :class="{ 'panel-disabled': !canSelectShape }">
             <h3 class="panel-title-with-info">
-              Size & Shape 1
+              Size & Shape
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
             <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
@@ -661,11 +671,10 @@ const onSubmit = async () => {
                 <span
                   class="swatch-chip slate-chip"
                   :class="selectedShape.id"
-                  :style="getSlateChipStyle(
-                    selectedShape,
-                    getSlateColorImageUrl(item, selectedShape.id)
-                  )"
-                />
+                  :style="getSlateChipStyle(selectedShape)"
+                >
+                  <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedShape.id)" :alt="item.label" />
+                </span>
                 <span class="slate-label">{{ item.label }}</span>
                 <small class="slate-price">${{ item.price.toFixed(2) }}</small>
                 <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
@@ -703,23 +712,29 @@ const onSubmit = async () => {
             </div>
             <span>Your Custom Sign</span>
           </header>
-          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]">
+            <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[previewSignBaseStyle, getPreviewShapeStyle(selectedShape)]">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div v-if="templateImageUrl || templateSvgCode" class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <div v-else class="preview-placeholder">
@@ -824,11 +839,10 @@ const onSubmit = async () => {
                 <span
                   class="swatch-chip slate-chip"
                   :class="selectedTemplate?.shapeId || 'oval'"
-                  :style="getSlateChipStyle(
-                    { id: selectedTemplate?.shapeId || 'oval' },
-                    getSlateColorImageUrl(item, selectedTemplate?.shapeId || 'oval')
-                  )"
-                />
+                  :style="getSlateChipStyle({ id: selectedTemplate?.shapeId || 'oval' })"
+                >
+                  <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedTemplate?.shapeId || 'oval')" :alt="item.label" />
+                </span>
                 <span class="slate-label">{{ item.label }}</span>
                 <small class="slate-price">${{ item.price.toFixed(2) }}</small>
                 <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
@@ -853,12 +867,7 @@ const onSubmit = async () => {
                 :class="{ selected: state.paintColorId === item.id }"
                 @click="state.paintColorId = item.id"
               >
-                <span
-                  class="paint-chip"
-                  :style="{
-                    backgroundImage: item.imageUrl ? `url('${item.imageUrl}')` : `rgba(0,0,0,0)`
-                  }"
-                />
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.label" class="paint-chip paint-chip-img" />
                 <span class="paint-label">{{ item.label }}</span>
                 <span v-if="state.paintColorId === item.id" class="option-check" aria-hidden="true" />
               </button>
@@ -893,25 +902,31 @@ const onSubmit = async () => {
                 <circle cx="6" cy="6" r="6" fill="#05DF72"/>
               </svg>
             </div>
-            <span>Your Custom Sign</span>
+            <span>Your Custom Sign 1</span>
           </header>
-          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]" :style="preview.surfaceStyle">
+          <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]">
+            <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[previewSignBaseStyle, getPreviewShapeStyle(selectedShape)]">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div v-if="templateImageUrl || templateSvgCode" class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <div v-else class="preview-placeholder">
@@ -1003,23 +1018,29 @@ const onSubmit = async () => {
         </div>
         <aside class="preview-card summary-card">
           <header class="order-summary-header">Order Summary</header>
-          <div ref="previewCaptureRef" class="preview-canvas" :class="selectedShape.id" :style="preview.surfaceStyle">
+          <div ref="previewCaptureRef" class="preview-canvas" :class="selectedShape.id">
+            <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <span v-else class="preview-no-template">Select a template to preview</span>
             </template>
             <template v-else>
-              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
+              <div v-if="selectedShape?.id" class="preview-sign" :class="[selectedShape?.id, state.slateColorId]" :style="[previewSignBaseStyle, getPreviewShapeStyle(selectedShape)]">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div v-if="templateImageUrl || templateSvgCode" class="preview-template-wrapper" :style="templateWrapperStyle">
-                  <div class="preview-paint-bg" :style="paintBackgroundStyle" />
+                  <div class="preview-paint-bg" :style="paintBackgroundStyle">
+                    <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
+                  </div>
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
-                  <div v-else class="preview-template-overlay" :style="templateDesignStyle" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
               <div v-else class="preview-placeholder">
@@ -1609,13 +1630,13 @@ const onSubmit = async () => {
 }
 
 .surface-thumb {
+  display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
   border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  object-fit: cover;
+  object-position: center;
 }
 
 .surface-check {
@@ -1727,9 +1748,19 @@ const onSubmit = async () => {
 
 .slate-chip {
   border-radius: 6px;
-  /* background-size: cover; */
-  background-position: center;
-  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+.slate-chip-img {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.2);
 }
 
 .slate-chip.rectangle {
@@ -1799,9 +1830,8 @@ const onSubmit = async () => {
   height: 80px;
   border-radius: 6px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  object-fit: cover;
+  object-position: center;
 }
 
 .paint-label {
@@ -1893,11 +1923,43 @@ const onSubmit = async () => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  mix-blend-mode: multiply;
+  filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.85) 0px 3px 8px) drop-shadow(rgba(0,0,0,0.45) 0px -1px 5px);
 }
 .preview-template-svg svg {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Engraved depth — diagonal light-to-dark gradient on top of template */
+.preview-template-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Engraved depth — inset bevel: light top-left, dark bottom-right */
+.preview-template-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 2px 2px 4px rgba(255, 255, 255, 0.22),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  z-index: 6;
 }
 
 .preview-live-text {
@@ -1927,19 +1989,59 @@ const onSubmit = async () => {
 }
 
 .preview-canvas {
+  position: relative;
   border-radius: 10px;
-  height: 280px; 
+  height: 280px;
   width: 417px;
   display: grid;
   place-items: center;
   border: 1px solid #d4d3de;
   margin-bottom: 10px;
-  padding: 16px; 
+  padding: 16px;
+  overflow: hidden;
+}
+
+.preview-surface-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
+}
+
+.preview-sign-slate-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
+  z-index: 0;
+  filter: contrast(150%);
+  transform: scale(1.02);
+}
+
+.preview-paint-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
+}
+
+.preview-template-img {
+  display: block;
 }
 
 .preview-sign {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1948,15 +2050,18 @@ const onSubmit = async () => {
   color: #f8f2d8;
 }
 
-/* .preview-sign::after {
+.preview-sign::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.38), inset 0 3px 8px rgba(0, 0, 0, 0.18), inset 0 -2px 5px rgba(0, 0, 0, 0.14);
+  /* box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.38),
+    inset 0 3px 8px rgba(0, 0, 0, 0.18),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.14); */
   pointer-events: none;
   z-index: 10;
-} */
+}
 
 .preview-sign.oval_cottage,
 .preview-sign.oval {
@@ -2687,22 +2792,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .select2-selection__rendered {
 	margin: 0 !important;
 }
-.preview-sign.rectangle.green {
-	background-size: 111% !important;
-}
-.preview-sign.arch,
-.preview-sign.oval_cottage  {
-	background-size: 101% !important;
-}
-.preview-sign.oval.mottle-black {
-	background-size: 106% !important;
-}
-.preview-sign.oval.mottle-black {
-	background-size: 114% !important;
-}
-.preview-sign.arched.green {
-	background-size: 112% !important;
-}
+
 .preview-sign.round {
 	height: 240px !important;
 }
@@ -2743,18 +2833,10 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 /* .preview-sign {
 	background-size: 120% !important;
 } */
-.swatch-chip.slate-chip.rectangle {
-	background-size: 120% !important;
-}
 .swatch-chip {
 	border: none !important;
 }
-.swatch-chip.slate-chip.arch,
-.swatch-chip.slate-chip.oval_cottage {
-	background-size: 120% !important;
-}
 .swatch-chip.slate-chip {
-	background-size: 120% !important;
 	aspect-ratio: 13 / 10 !important;
 }
 .swatch-chip.slate-chip.arch,
