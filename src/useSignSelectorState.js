@@ -319,7 +319,8 @@ export const useSignSelectorState = () => {
   })
 
   const preview = computed(() => {
-    const shapeIdForBg = selectedTemplate.value?.surfaceVariant || selectedShape.value.id || ''
+    const templateShapeId = selectedTemplate.value?.shapeId !== 'all' ? (selectedTemplate.value?.shapeId || '') : ''
+    const shapeIdForBg = selectedTemplate.value?.surfaceVariant || selectedShape.value?.id || templateShapeId || ''
     return {
       surfaceStyle: {
         backgroundImage: getSurfaceImageUrl(selectedSurface.value, shapeIdForBg)

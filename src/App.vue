@@ -269,7 +269,7 @@ const noShapePreviewStyle = computed(() => {
   }
 
   return {
-    ...preview.value.signStyle,
+    color: preview.value.signStyle?.color,
     aspectRatio: `${tWidth} / ${tHeight}`,
     width: `min(100%, ${maxWidth})`,
     height: 'auto',
@@ -716,6 +716,7 @@ const onSubmit = async () => {
             <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
@@ -821,7 +822,7 @@ const onSubmit = async () => {
           <!-- Slate Color (moved to Step 3 when no size-shape flow) -->
           <section v-if="isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel" :class="{ 'panel-disabled': !canSelectSlateStep3 }">
             <h3 class="panel-title-with-info">
-           
+              Slate Color
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
             <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
@@ -902,12 +903,13 @@ const onSubmit = async () => {
                 <circle cx="6" cy="6" r="6" fill="#05DF72"/>
               </svg>
             </div>
-            <span>Your Custom Sign 1</span>
+            <span>Your Custom Sign</span>
           </header>
           <div class="preview-canvas" :class="[selectedShape?.id, state.slateColorId]">
             <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
@@ -1022,6 +1024,7 @@ const onSubmit = async () => {
             <img v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl || templateSvgCode" class="preview-no-shape-sign" :style="noShapePreviewStyle">
+                <img v-if="previewSignSlateUrl" class="preview-sign-slate-img" :src="previewSignSlateUrl" alt="" />
                 <div class="preview-template-wrapper" :style="templateWrapperStyle">
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
@@ -2847,9 +2850,5 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .swatch-chip.slate-chip.round{
 	aspect-ratio: 9 / 13 !important;
 }
-.preview-no-shape-sign {
-	background-size: 200% !important;
-}
 
- 
 </style>
