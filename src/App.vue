@@ -311,7 +311,8 @@ const templateDesignStyle = computed(() => {
     objectFit: 'cover',
     objectPosition: 'center',
     mixBlendMode: 'multiply',
-    filter: 'contrast(1.15) brightness(0.93) drop-shadow(1px 0px 0px #000)'
+    filter: 'contrast(1.15)'
+    // filter: 'contrast(1.15) brightness(0.93) drop-shadow(1px 0px 0px #000)'
   }
 })
 
