@@ -437,8 +437,8 @@ const getAspectRatio = (shape) => {
 
 const getShapeCardStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? '58px' : '100%',
-  height: 'auto',
+  width: shape?.id === 'round' ? '50%' : '100%',
+  height: shape?.id === 'round' ? '100%' : 'auto',
   marginInline: 'auto'
 })
 
@@ -1591,12 +1591,13 @@ const onSubmit = async () => {
 
 .shape-preview {
   width: 100%;
-  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16);
   background: linear-gradient(135deg, #5f666f 0%, #2b3239 100%);
   color: #f4f4f4;
   display: grid;
   place-items: center;
   margin-inline: auto;
+  transform: translateZ(0);
 }
 
 .shape-preview.rectangle {
@@ -1605,20 +1606,28 @@ const onSubmit = async () => {
 
 .shape-preview.oval_cottage,
 .shape-preview.oval {
-  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  border-radius: 0;
 }
 
-.shape-preview.oval_cottage,
 .shape-preview.arch {
-  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  border-radius: 0;
 }
-.shape-preview.arched,
+
+.shape-preview.arched {
+  clip-path: ellipse(50% 100% at 50% 100%);
+  border-radius: 0;
+}
+
 .preview-sign.arched,
 .slate-chip.arched {
   border-radius: 50% 50% 0% 0;
-} 
+}
+
 .shape-preview.round {
-  border-radius: 50%;
+  clip-path: circle(50% at 50% 50%);
+  border-radius: 0;
 }
 
 .shape-dim {
@@ -1754,6 +1763,8 @@ const onSubmit = async () => {
   border-radius: 6px;
   position: relative;
   overflow: hidden;
+  will-change: transform;
+  isolation: isolate;
 }
 
 .slate-chip-img {
@@ -1764,7 +1775,6 @@ const onSubmit = async () => {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.2);
 }
 
 .slate-chip.rectangle {
@@ -1773,16 +1783,18 @@ const onSubmit = async () => {
 
 .slate-chip.oval_cottage,
 .slate-chip.oval {
-  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  border-radius: 0;
 }
 
-.slate-chip.oval_cottage,
 .slate-chip.arch {
-  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  border-radius: 0;
 }
 
 .slate-chip.round {
-  border-radius: 50%;
+  clip-path: circle(50% at 50% 50%);
+  border-radius: 0;
   margin-inline: auto;
 }
 
@@ -2485,6 +2497,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+  will-change: transform;
 }
 
 .preview-no-shape-sign::after {
@@ -2851,5 +2864,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 .swatch-chip.slate-chip.round{
 	aspect-ratio: 9 / 13 !important;
 }
-
+.swatch-chip.slate-chip.rectangular {
+	height: 50% !important;
+}
 </style>
