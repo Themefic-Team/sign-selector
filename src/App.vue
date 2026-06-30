@@ -1606,18 +1606,16 @@ const onSubmit = async () => {
 
 .shape-preview.oval_cottage,
 .shape-preview.oval {
-  clip-path: ellipse(50% 50% at 50% 50%);
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .shape-preview.arch {
-  clip-path: ellipse(50% 50% at 50% 50%);
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .shape-preview.arched {
-  clip-path: ellipse(50% 100% at 50% 100%);
-  border-radius: 0;
+ border-radius: 50% 50% 0% 0;
+
 }
 
 .preview-sign.arched,
@@ -1626,8 +1624,7 @@ const onSubmit = async () => {
 }
 
 .shape-preview.round {
-  clip-path: circle(50% at 50% 50%);
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .shape-dim {
@@ -1793,8 +1790,8 @@ const onSubmit = async () => {
 }
 
 .slate-chip.round {
-  clip-path: circle(50% at 50% 50%);
-  border-radius: 0;
+  /* clip-path: circle(50% at 50% 50%); */
+  border-radius: 50%;
   margin-inline: auto;
 }
 

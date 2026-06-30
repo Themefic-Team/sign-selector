@@ -784,6 +784,14 @@
       save(normalized);
     };
 
+    const moveShape = (fromIndex, toIndex) => {
+      if (toIndex < 0 || toIndex >= items.length) return;
+      const next = [...items];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      setItems(next);
+    };
+
     if (loading || signStylesLoading) return el('p', null, __('Loading…', 'sign-selector'));
 
     return el(Fragment, null,
@@ -824,6 +832,8 @@
               ),
               el('td', null,
                 el('div', { className: 'ss-actions' },
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => moveShape(i, i - 1), disabled: i === 0, title: __('Move Up', 'sign-selector') }, '▲'),
+                  el('button', { className: 'ss-btn ss-btn-sm', onClick: () => moveShape(i, i + 1), disabled: i === items.length - 1, title: __('Move Down', 'sign-selector') }, '▼'),
                   el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openEditor(i) }, __('Edit', 'sign-selector')),
                   el('button', { className: 'ss-btn ss-btn-danger ss-btn-sm', onClick: () => askRemove(i) }, __('Remove', 'sign-selector'))
                 )
