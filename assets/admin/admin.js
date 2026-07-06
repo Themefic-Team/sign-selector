@@ -37,6 +37,88 @@
     frame.open();
   };
 
+  /* ─── Image Upload Field ──────────────────────────────── */
+
+  const ImageUploadField = ({ value, onChange }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState('');
+    const [inputId] = useState(() => 'ss-file-' + uid());
+
+    const uploadFile = (file) => {
+      if (!file || !file.type.startsWith('image/')) {
+        setUploadError(__('Please select an image file.', 'sign-selector'));
+        return;
+      }
+      setUploadError('');
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      const apiRoot = (window.wpApiSettings && window.wpApiSettings.root) || '/wp-json/';
+      const nonce = (window.wpApiSettings && window.wpApiSettings.nonce) || '';
+      fetch(apiRoot + 'wp/v2/media', {
+        method: 'POST',
+        headers: {
+          'X-WP-Nonce': nonce,
+          'Content-Disposition': 'attachment; filename="' + encodeURIComponent(file.name) + '"',
+        },
+        body: formData,
+      })
+        .then((r) => { if (!r.ok) throw new Error('Upload failed'); return r.json(); })
+        .then((data) => { onChange(data.source_url || ''); setIsUploading(false); })
+        .catch(() => { setUploadError(__('Upload failed. Please try again.', 'sign-selector')); setIsUploading(false); });
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) uploadFile(file);
+    };
+
+    const handleFileInput = (e) => {
+      const file = e.target.files[0];
+      if (file) uploadFile(file);
+      e.target.value = '';
+    };
+
+    if (value) {
+      return el('div', { className: 'ss-img-upload has-image' },
+        el('div', { className: 'ss-img-upload-preview' },
+          el('img', { src: value, alt: '', className: 'ss-img-upload-thumb' })
+        ),
+        el('div', { className: 'ss-img-upload-actions' },
+          el('button', { type: 'button', className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker(onChange) }, '⇄ ' + __('Replace', 'sign-selector')),
+          el('button', { type: 'button', className: 'ss-btn ss-btn-sm ss-btn-danger', onClick: () => onChange('') }, '✕ ' + __('Remove', 'sign-selector'))
+        )
+      );
+    }
+
+    return el('div', { className: 'ss-img-upload-wrapper' },
+      el('label', {
+        className: 'ss-img-upload-zone' + (isDragging ? ' dragging' : '') + (isUploading ? ' uploading' : ''),
+        htmlFor: inputId,
+        onDragOver: (e) => { e.preventDefault(); setIsDragging(true); },
+        onDragLeave: () => setIsDragging(false),
+        onDrop: handleDrop,
+      },
+        el('input', { id: inputId, type: 'file', accept: 'image/*', className: 'ss-img-upload-input', onChange: handleFileInput, disabled: isUploading }),
+        isUploading
+          ? el('span', { className: 'ss-img-upload-uploading' }, __('Uploading…', 'sign-selector'))
+          : el(Fragment, null,
+              el('span', { className: 'ss-img-upload-icon' }, '⬆'),
+              el('span', { className: 'ss-img-upload-hint' }, __('Drag & drop or click to upload', 'sign-selector')),
+              el('span', {
+                role: 'button',
+                className: 'ss-btn ss-btn-sm ss-img-browse-btn',
+                onClick: (e) => { e.preventDefault(); openMediaPicker(onChange); }
+              }, __('Browse Media Library', 'sign-selector'))
+            )
+      ),
+      uploadError && el('span', { className: 'ss-img-upload-error' }, uploadError)
+    );
+  };
+
   /* ─── Confirm Modal ──────────────────────────────────── */
 
   const ConfirmModal = ({ message, onConfirm, onCancel }) => {
@@ -405,11 +487,8 @@
               el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Description', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].description || '', onChange: (e) => updateField(editingIndex, 'description', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
-              el('div', { className: 'ss-img-cell' },
-                el('input', { className: 'ss-input', value: items[editingIndex].iconUrl || '', onChange: (e) => updateField(editingIndex, 'iconUrl', e.target.value) }),
-                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'iconUrl', url)) }, __('Browse', 'sign-selector'))
-              ),
+              el('label', { className: 'ss-template-field-label' }, __('Image', 'sign-selector')),
+              el(ImageUploadField, { value: items[editingIndex].iconUrl || '', onChange: (url) => updateField(editingIndex, 'iconUrl', url) }),
               el('label', { className: 'ss-template-field-label' }, __('Inline SVG (optional)', 'sign-selector')),
               el('textarea', { className: 'ss-input ss-svg-textarea', rows: 4, value: items[editingIndex].icon || '', onChange: (e) => updateField(editingIndex, 'icon', e.target.value) }),
               el('div', { className: 'ss-template-enabled-row' },
@@ -620,11 +699,8 @@
               el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Default Image URL', 'sign-selector')),
-              el('div', { className: 'ss-img-cell' },
-                el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
-                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-              ),
+              el('label', { className: 'ss-template-field-label' }, __('Default Image', 'sign-selector')),
+              el(ImageUploadField, { value: items[editingIndex].imageUrl || '', onChange: (url) => updateField(editingIndex, 'imageUrl', url) }),
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
@@ -653,18 +729,10 @@
                 shapeOptions.map(shape =>
                   el('div', { className: 'ss-shape-img-item', key: shape.id },
                     el('label', { className: 'ss-template-field-label' }, shape.label || shape.id),
-                    items[editingIndex].images && items[editingIndex].images[shape.id]
-                      ? el('img', { className: 'ss-img-preview', src: items[editingIndex].images[shape.id], alt: shape.id })
-                      : null,
-                    el('div', { className: 'ss-img-cell' },
-                      el('input', {
-                        className: 'ss-input',
-                        value: (items[editingIndex].images && items[editingIndex].images[shape.id]) || '',
-                        onChange: (e) => updateShapeImage(editingIndex, shape.id, e.target.value),
-                        placeholder: __('Image URL', 'sign-selector')
-                      }),
-                      el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(editingIndex, shape.id, url)) }, __('Browse', 'sign-selector'))
-                    )
+                    el(ImageUploadField, {
+                      value: (items[editingIndex].images && items[editingIndex].images[shape.id]) || '',
+                      onChange: (url) => updateShapeImage(editingIndex, shape.id, url)
+                    })
                   )
                 )
               )
@@ -1071,18 +1139,14 @@
           el('div', { className: 'ss-template-form-grid' },
             el('div', { className: 'ss-template-options-section' },
               el('h4', null, __('Basic Details', 'sign-selector')),
-              items[editingIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingIndex].imageUrl, alt: items[editingIndex].label || 'Slate preview' }) : null,
               el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
               el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
               el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
               el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Default Image URL', 'sign-selector')),
-              el('div', { className: 'ss-img-cell' },
-                el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
-                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-              ),
+              el('label', { className: 'ss-template-field-label' }, __('Default Image', 'sign-selector')),
+              el(ImageUploadField, { value: items[editingIndex].imageUrl || '', onChange: (url) => updateField(editingIndex, 'imageUrl', url) }),
               el('div', { className: 'ss-template-enabled-row' },
                 el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
                 el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
@@ -1111,18 +1175,10 @@
                 getVisibleShapeIds(items[editingIndex]).map(shapeId =>
                   el('div', { className: 'ss-shape-img-item', key: shapeId },
                     el('label', { className: 'ss-template-field-label' }, getShapeDisplayLabel(shapeId)),
-                    items[editingIndex].images && items[editingIndex].images[shapeId]
-                      ? el('img', { className: 'ss-img-preview', src: items[editingIndex].images[shapeId], alt: shapeId })
-                      : null,
-                    el('div', { className: 'ss-img-cell' },
-                      el('input', {
-                        className: 'ss-input',
-                        value: (items[editingIndex].images && items[editingIndex].images[shapeId]) || '',
-                        onChange: (e) => updateShapeImage(editingIndex, shapeId, e.target.value),
-                        placeholder: __('Image URL', 'sign-selector')
-                      }),
-                      el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateShapeImage(editingIndex, shapeId, url)) }, __('Browse', 'sign-selector'))
-                    )
+                    el(ImageUploadField, {
+                      value: (items[editingIndex].images && items[editingIndex].images[shapeId]) || '',
+                      onChange: (url) => updateShapeImage(editingIndex, shapeId, url)
+                    })
                   )
                 )
               )
@@ -1451,18 +1507,9 @@
               el('h4', null, __('Basic Details', 'sign-selector')),
               items[editingTemplateIndex].svgCode && items[editingTemplateIndex].svgCode.trim()
                 ? el('div', { className: 'ss-img-preview ss-template-modal-preview ss-svg-template-preview', dangerouslySetInnerHTML: { __html: items[editingTemplateIndex].svgCode } })
-                : items[editingTemplateIndex].imageUrl
-                  ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingTemplateIndex].imageUrl, alt: items[editingTemplateIndex].label || 'Template preview' })
-                  : null,
-              el('label', { className: 'ss-template-field-label' }, __('Image URL', 'sign-selector')),
-              el('div', { className: 'ss-img-cell' },
-                el('input', {
-                  className: 'ss-input',
-                  value: items[editingTemplateIndex].imageUrl || '',
-                  onChange: (e) => updateField(editingTemplateIndex, 'imageUrl', e.target.value)
-                }),
-                el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingTemplateIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-              ),
+                : null,
+              el('label', { className: 'ss-template-field-label' }, __('Image', 'sign-selector')),
+              el(ImageUploadField, { value: items[editingTemplateIndex].imageUrl || '', onChange: (url) => updateField(editingTemplateIndex, 'imageUrl', url) }),
               el('label', { className: 'ss-template-field-label' }, __('SVG Code (overrides image when provided)', 'sign-selector')),
               el('textarea', {
                 className: 'ss-input ss-svg-textarea',
@@ -1647,18 +1694,14 @@
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
           el('h3', { className: 'ss-template-options-title' }, isAddingPaint ? __('Add Paint Color', 'sign-selector') : __('Edit Paint Color', 'sign-selector')),
           el('div', { className: 'ss-template-options-section' },
-            items[editingIndex].imageUrl ? el('img', { className: 'ss-img-preview ss-template-modal-preview', src: items[editingIndex].imageUrl, alt: items[editingIndex].label || 'Paint preview' }) : null,
             el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
             el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
             el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
             el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
             el('label', { className: 'ss-template-field-label' }, __('Hex', 'sign-selector')),
             el('input', { className: 'ss-input', type: 'color', value: items[editingIndex].hex || '#ffffff', onChange: (e) => updateField(editingIndex, 'hex', e.target.value) }),
-            el('label', { className: 'ss-template-field-label' }, __('Texture Image URL', 'sign-selector')),
-            el('div', { className: 'ss-img-cell' },
-              el('input', { className: 'ss-input', value: items[editingIndex].imageUrl || '', onChange: (e) => updateField(editingIndex, 'imageUrl', e.target.value) }),
-              el('button', { className: 'ss-btn ss-btn-sm', onClick: () => openMediaPicker((url) => updateField(editingIndex, 'imageUrl', url)) }, __('Browse', 'sign-selector'))
-            ),
+            el('label', { className: 'ss-template-field-label' }, __('Texture Image', 'sign-selector')),
+            el(ImageUploadField, { value: items[editingIndex].imageUrl || '', onChange: (url) => updateField(editingIndex, 'imageUrl', url) }),
             el('div', { className: 'ss-template-enabled-row' },
               el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
               el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })

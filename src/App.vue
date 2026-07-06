@@ -435,19 +435,34 @@ const getAspectRatio = (shape) => {
   return `${shape.width} / ${shape.height}`
 }
 
-const getShapeCardStyle = (shape) => ({
-  aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? '50%' : '100%',
-  height: shape?.id === 'round' ? '100%' : 'auto',
-  marginInline: 'auto'
+// Fixed 155px reference: the widest shape always renders at 155px so size is consistent
+// across all screen widths. The grid wraps to fewer columns instead of shrinking cards.
+const shapeScale = computed(() => {
+  const maxW = shapes.value.filter(s => s.width).reduce((m, s) => Math.max(m, s.width), 1)
+  return 155 / maxW
 })
 
-const getSlateChipStyle = (shape) => ({
-  aspectRatio: getAspectRatio(shape),
-  width: shape?.id === 'round' ? '62px' : '100%',
-  height: 'auto',
-  marginInline: shape?.id === 'round' ? 'auto' : '0'
-})
+const getShapeCardStyle = (shape) => {
+  if (!shape?.width || !shape?.height) return {}
+  const s = shapeScale.value
+  return {
+    width:  `${Math.round(shape.width  * s)}px`,
+    height: `${Math.round(shape.height * s)}px`,
+  }
+}
+
+const getSlateChipStyle = (shapeRef) => {
+  const shape = (shapeRef?.width && shapeRef?.height)
+    ? shapeRef
+    : shapes.value.find(s => s.id === shapeRef?.id)
+  // Fallback to a visible default when no dimension data is available
+  if (!shape?.width || !shape?.height) return { width: '80px', height: '55px' }
+  const s = shapeScale.value                   // same px/inch scale as shape cards
+  return {
+    width:  `${Math.round(shape.width  * s)}px`,
+    height: `${Math.round(shape.height * s)}px`,
+  }
+}
 
 const getPreviewShapeStyle = (shape) => ({
   aspectRatio: getAspectRatio(shape),
@@ -637,9 +652,11 @@ const onSubmit = async () => {
                 :class="{ selected: state.shapeId === item.id }"
                 @click="state.shapeId = item.id"
               >
-                <span class="shape-preview" :class="item.id" :style="getShapeCardStyle(item)">
-                  <span class="shape-dim">{{ item.label }}</span>
-                </span>
+                <div class="shape-preview-wrap">
+                  <span class="shape-preview" :class="item.id" :style="getShapeCardStyle(item)">
+                    <span class="shape-dim">{{ item.label }}</span>
+                  </span>
+                </div>
                 <small class="shape-price" v-if="item.basePrice != 0">${{ item.basePrice.toFixed(2) }}</small>
                 <span v-if="state.shapeId === item.id" class="option-check" aria-hidden="true" />
               </button>
@@ -669,13 +686,15 @@ const onSubmit = async () => {
                 @click="state.slateColorId = item.id"
               >
               
-                <span
-                  class="swatch-chip slate-chip"
-                  :class="selectedShape.id"
-                  :style="getSlateChipStyle(selectedShape)"
-                >
-                  <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedShape.id)" :alt="item.label" />
-                </span>
+                <div class="slate-chip-wrap">
+                  <span
+                    class="swatch-chip slate-chip"
+                    :class="selectedShape.id"
+                    :style="getSlateChipStyle(selectedShape)"
+                  >
+                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedShape.id)" :alt="item.label" />
+                  </span>
+                </div>
                 <span class="slate-label">{{ item.label }}</span>
                 <small class="slate-price">${{ item.price.toFixed(2) }}</small>
                 <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
@@ -838,13 +857,15 @@ const onSubmit = async () => {
                 :class="{ selected: state.slateColorId === item.id }"
                 @click="state.slateColorId = item.id"
               > 
-                <span
-                  class="swatch-chip slate-chip"
-                  :class="selectedTemplate?.shapeId || 'oval'"
-                  :style="getSlateChipStyle({ id: selectedTemplate?.shapeId || 'oval' })"
-                >
-                  <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedTemplate?.shapeId || 'oval')" :alt="item.label" />
-                </span>
+                <div class="slate-chip-wrap">
+                  <span
+                    class="swatch-chip slate-chip"
+                    :class="selectedTemplate?.shapeId || 'oval'"
+                    :style="getSlateChipStyle({ id: selectedTemplate?.shapeId || 'oval' })"
+                  >
+                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedTemplate?.shapeId || 'oval')" :alt="item.label" />
+                  </span>
+                </div>
                 <span class="slate-label">{{ item.label }}</span>
                 <small class="slate-price">${{ item.price.toFixed(2) }}</small>
                 <span v-if="state.slateColorId === item.id" class="option-check" aria-hidden="true" />
@@ -1506,7 +1527,7 @@ const onSubmit = async () => {
   line-height: 1;
 }
 
-.surface-scroller {
+/* .surface-scroller {
   max-height: 296px;
   overflow-y: auto;
   padding-right: 8px;
@@ -1534,9 +1555,41 @@ const onSubmit = async () => {
 }
 
 .surface-scroller::-webkit-scrollbar-thumb:hover {
-  background: #5a508a;
+  background: #5a508a;/
+} */
+
+.surface-scroller {
+  max-height: 296px;
+  overflow-y: auto;
+  padding-right: 8px;
+
+  /* Firefox */
+  scrollbar-width: thin; /* auto | thin | none */
+  scrollbar-color: #000 #e4e2f0;
 }
 
+/* Chrome, Edge, Safari */
+.surface-scroller::-webkit-scrollbar {
+  width: 14px;
+}
+
+.surface-scroller::-webkit-scrollbar-track {
+  background: #e4e2f0;
+  border-radius: 999px;
+}
+
+.surface-scroller::-webkit-scrollbar-thumb {
+  background: #000;
+  border-radius: 999px;
+  border: 3px solid #e4e2f0;
+}
+
+.surface-scroller::-webkit-scrollbar-thumb:hover {
+  background: #5a508a;
+}
+* {
+  scrollbar-width: none;
+}
 .surface-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
@@ -1549,7 +1602,7 @@ const onSubmit = async () => {
 
 .shape-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
   gap: 12px;
 }
 
@@ -1589,14 +1642,23 @@ const onSubmit = async () => {
   justify-content: space-between;
 }
 
-.shape-preview {
+.shape-preview-wrap {
   width: 100%;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shape-preview {
+  /* width & height are set via inline style — proportional to actual sign dimensions */
+  max-width: 100%;
+  flex-shrink: 0;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16);
   background: linear-gradient(135deg, #5f666f 0%, #2b3239 100%);
   color: #f4f4f4;
   display: grid;
   place-items: center;
-  margin-inline: auto;
   transform: translateZ(0);
 }
 
@@ -1628,7 +1690,7 @@ const onSubmit = async () => {
 }
 
 .shape-dim {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
 }
 
@@ -1750,13 +1812,23 @@ const onSubmit = async () => {
 }
 
 .swatch-chip {
-  width: 100%;
-  height: 30px;
   border-radius: 6px;
   border: 1px solid #ccc;
 }
 
+.slate-chip-wrap {
+  width: 100%;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .slate-chip {
+  /* width & height set via inline style — proportional to actual sign dimensions */
+  display: block;
+  max-width: 100%;
+  flex-shrink: 0;
   border-radius: 6px;
   position: relative;
   overflow: hidden;
@@ -2354,7 +2426,6 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .shape-grid,
   .slate-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2409,7 +2480,6 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
     gap: 10px;
   }
 
-  .shape-grid,
   .slate-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2848,20 +2918,15 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	background-size: 120% !important;
 } */
 .swatch-chip {
-	border: none !important;
-}
-.swatch-chip.slate-chip {
-	aspect-ratio: 13 / 10 !important;
-}
-.swatch-chip.slate-chip.arch,
-.swatch-chip.slate-chip.oval_cottage {
-	aspect-ratio: 24 / 12 !important;
+  border: none !important;
 }
 
-.swatch-chip.slate-chip.round{
-	aspect-ratio: 9 / 13 !important;
+.slate-panel .slate-card {
+  padding: 8px 0 !important;
 }
-.swatch-chip.slate-chip.rectangular {
-	height: 50% !important;
+.slate-panel .slate-chip-wrap {
+  padding: 0 8px !important;
 }
+/* aspect-ratio and size overrides removed — width & height are now set via inline style */
 </style>
+option 
