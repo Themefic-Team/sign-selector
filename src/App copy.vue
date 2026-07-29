@@ -89,17 +89,17 @@ const validateStep = (step) => {
       if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
     }
     if (step === 3) {
-      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
-      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate colour to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint colour to continue.'
     }
   } else {
     if (step === 2) {
       if (hasSection('size-shape') && !state.shapeId) return 'Please select a size & shape to continue.'
-      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate color to continue.'
+      if (hasSection('slate-color') && !state.slateColorId) return 'Please select a slate colour to continue.'
     }
     if (step === 3) {
       if (hasSection('design-template') && !state.templateId) return 'Please select a design template to continue.'
-      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint color to continue.'
+      if (hasSection('paint-color') && !state.paintColorId) return 'Please select a paint colour to continue.'
     }
   }
   return ''
@@ -632,7 +632,7 @@ const onSubmit = async () => {
             </div>
           </section>
 
-          <!-- Slate Color (flow-dependent, only shown in Step 2 for normal flow) -->
+          <!-- Slate colour (flow-dependent, only shown in Step 2 for normal flow) -->
           <section v-if="!isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel" :class="{ 'panel-disabled': !canSelectSlateStep2 }">
             <h3 class="panel-title-with-info">
               Slate Color
@@ -791,10 +791,10 @@ const onSubmit = async () => {
             </div>
           </section>
 
-          <!-- Slate Color (moved to Step 3 when no size-shape flow) -->
+          <!-- Slate colour (moved to Step 3 when no size-shape flow) -->
           <section v-if="isNoShapeFlow && hasSection('slate-color')" class="panel slate-panel" :class="{ 'panel-disabled': !canSelectSlateStep3 }">
             <h3 class="panel-title-with-info">
-              Slate Color
+              Slate colour
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
             <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>
@@ -819,10 +819,10 @@ const onSubmit = async () => {
             </div>
           </section>
 
-          <!-- Paint Color (flow-dependent) -->
+          <!-- Paint colour (flow-dependent) -->
           <section v-if="hasSection('paint-color')" class="panel paint-panel" :class="{ 'panel-disabled': isNoShapeFlow ? !canSelectPaintStep3NoShape : !canSelectPaintStep3 }">
             <h3 class="panel-title-with-info">
-              Paint Color
+              Paint colour
               <span class="info-dot" aria-hidden="true">i</span>
             </h3>
             <p v-if="selectedStyleSubtitle" class="panel-style-subtitle">{{ selectedStyleSubtitle }}</p>

@@ -577,11 +577,11 @@ class SignSelector
         }
 
         if (in_array('slate-color', $flow, true) && empty($configuration['sign']['slateColor']['id'])) {
-            return __('Please select a slate color to continue.', 'sign-selector');
+            return __('Please select a slate colour to continue.', 'sign-selector');
         }
 
         if (in_array('paint-color', $flow, true) && empty($configuration['sign']['paintColor']['id'])) {
-            return __('Please select a paint color to continue.', 'sign-selector');
+            return __('Please select a paint colour to continue.', 'sign-selector');
         }
 
         if (empty($configuration['pricing']['total']) || (float) $configuration['pricing']['total'] <= 0) {
