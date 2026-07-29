@@ -2023,9 +2023,9 @@ const onSubmit = async () => {
   mix-blend-mode: multiply;
   filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.75) 1px 2px 1.5px);
 }
-.preview-template-svg svg {
-  width: 100%;
-  height: 100%;
+.preview-template-svg :deep(svg) {
+  width: 100% !important;
+  height: 100% !important;
   object-fit: contain;
 }
 
@@ -2042,9 +2042,9 @@ const onSubmit = async () => {
   opacity: 0.6;
   pointer-events: none;
 }
-.preview-template-highlight svg {
-  width: 100%;
-  height: 100%;
+.preview-template-highlight :deep(svg) {
+  width: 100% !important;
+  height: 100% !important;
   object-fit: contain;
 }
 
