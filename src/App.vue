@@ -741,7 +741,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -754,7 +756,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -936,7 +940,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -949,7 +955,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -1051,7 +1059,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -1064,7 +1074,9 @@ const onSubmit = async () => {
                   <div class="preview-paint-bg" :style="paintBackgroundStyle">
                     <img v-if="paintTextureUrl" class="preview-paint-bg-img" :src="paintTextureUrl" alt="" />
                   </div>
+                  <div v-if="templateSvgCode" class="preview-template-overlay preview-template-highlight" v-html="templateSvgCode" aria-hidden="true" />
                   <div v-if="templateSvgCode" class="preview-template-overlay preview-template-svg" v-html="templateSvgCode" />
+                  <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-highlight" :src="templateImageUrl" alt="" :style="templateDesignStyle" aria-hidden="true" />
                   <img v-else-if="templateImageUrl" class="preview-template-overlay preview-template-img" :src="templateImageUrl" alt="" :style="templateDesignStyle" />
                 </div>
               </div>
@@ -2009,9 +2021,28 @@ const onSubmit = async () => {
   justify-content: center;
   overflow: hidden;
   mix-blend-mode: multiply;
-  filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.85) 0px 3px 8px) drop-shadow(rgba(0,0,0,0.45) 0px -1px 5px);
+  filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.75) 1px 2px 1.5px);
 }
 .preview-template-svg svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Engraved lettering – light bevel edge on the top/left of each letter,
+   sits behind the ink layer so only a sliver peeks out on the top-left side */
+.preview-template-highlight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  mix-blend-mode: screen;
+  transform: translate(-1px, -1px);
+  filter: brightness(0) invert(1) drop-shadow(rgba(255,255,255,0.9) 0px 0px 0.5px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.preview-template-highlight svg {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -2562,7 +2593,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
   width: min(100%, 280px);
   height: auto;
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 5px 8px 14px rgba(0, 0, 0, 0.4), 2px 3px 5px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   will-change: transform;
 }
@@ -2884,7 +2915,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	max-width: 416px !important;
 }
 .preview-sign {
-  filter: drop-shadow(1px 2px 2px #000000a3);
+  filter: drop-shadow(6px 9px 8px #00000073);
 }
 
 
