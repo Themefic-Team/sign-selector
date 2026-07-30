@@ -2025,7 +2025,7 @@ const onSubmit = async () => {
 }
 .preview-template-svg :deep(svg) {
   width: 100% !important;
-  height: 100% !important;
+  height: 105% !important;
   object-fit: contain;
 }
 
