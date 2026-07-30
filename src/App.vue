@@ -309,10 +309,7 @@ const templateDesignStyle = computed(() => {
     height: '100%',
     borderRadius: 'inherit',
     objectFit: 'cover',
-    objectPosition: 'center',
-    mixBlendMode: 'multiply',
-    filter: 'contrast(1.15)'
-    // filter: 'contrast(1.15) brightness(0.93) drop-shadow(1px 0px 0px #000)'
+    objectPosition: 'center'
   }
 })
 
@@ -445,19 +442,6 @@ const shapeScale = computed(() => {
 const getShapeCardStyle = (shape) => {
   if (!shape?.width || !shape?.height) return {}
   const s = shapeScale.value
-  return {
-    width:  `${Math.round(shape.width  * s)}px`,
-    height: `${Math.round(shape.height * s)}px`,
-  }
-}
-
-const getSlateChipStyle = (shapeRef) => {
-  const shape = (shapeRef?.width && shapeRef?.height)
-    ? shapeRef
-    : shapes.value.find(s => s.id === shapeRef?.id)
-  // Fallback to a visible default when no dimension data is available
-  if (!shape?.width || !shape?.height) return { width: '80px', height: '55px' }
-  const s = shapeScale.value                   // same px/inch scale as shape cards
   return {
     width:  `${Math.round(shape.width  * s)}px`,
     height: `${Math.round(shape.height * s)}px`,
@@ -687,12 +671,8 @@ const onSubmit = async () => {
               >
               
                 <div class="slate-chip-wrap">
-                  <span
-                    class="swatch-chip slate-chip"
-                    :class="selectedShape.id"
-                    :style="getSlateChipStyle(selectedShape)"
-                  >
-                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedShape.id)" :alt="item.label" />
+                  <span class="swatch-chip slate-chip rectangle">
+                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item)" :alt="item.label" />
                   </span>
                 </div>
                 <span class="slate-label">{{ item.label }}</span>
@@ -862,12 +842,8 @@ const onSubmit = async () => {
                 @click="state.slateColorId = item.id"
               > 
                 <div class="slate-chip-wrap">
-                  <span
-                    class="swatch-chip slate-chip"
-                    :class="selectedTemplate?.shapeId || 'oval'"
-                    :style="getSlateChipStyle({ id: selectedTemplate?.shapeId || 'oval' })"
-                  >
-                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item, selectedTemplate?.shapeId || 'oval')" :alt="item.label" />
+                  <span class="swatch-chip slate-chip rectangle">
+                    <img class="slate-chip-img" :src="getSlateColorImageUrl(item)" :alt="item.label" />
                   </span>
                 </div>
                 <span class="slate-label">{{ item.label }}</span>
@@ -1830,21 +1806,19 @@ const onSubmit = async () => {
 
 .slate-chip-wrap {
   width: 100%;
-  height: 84px;
+  height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .slate-chip {
-  /* width & height set via inline style — proportional to actual sign dimensions */
   display: block;
-  max-width: 100%;
-  flex-shrink: 0;
+  width: 100%;
+  height: 80px;
   border-radius: 6px;
   position: relative;
   overflow: hidden;
-  will-change: transform;
   isolation: isolate;
 }
 
@@ -1856,27 +1830,6 @@ const onSubmit = async () => {
   height: 100%;
   object-fit: cover;
   object-position: center;
-}
-
-.slate-chip.rectangle {
-  border-radius: 6px;
-}
-
-.slate-chip.oval_cottage,
-.slate-chip.oval {
-  clip-path: ellipse(50% 50% at 50% 50%);
-  border-radius: 0;
-}
-
-.slate-chip.arch {
-  clip-path: ellipse(50% 50% at 50% 50%);
-  border-radius: 0;
-}
-
-.slate-chip.round {
-  /* clip-path: circle(50% at 50% 50%); */
-  border-radius: 50%;
-  margin-inline: auto;
 }
 
 .slate-label {
@@ -2021,7 +1974,7 @@ const onSubmit = async () => {
   justify-content: center;
   overflow: hidden;
   mix-blend-mode: multiply;
-  filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.75) 1px 2px 1.5px);
+  filter: contrast(1.35)brightness(.85)drop-shadow(1px 2px 1.5px #00000073); 
 }
 .preview-template-svg :deep(svg) {
   width: 100% !important;
@@ -2036,6 +1989,8 @@ const onSubmit = async () => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  object-fit: cover;
+  object-position: center;
   mix-blend-mode: screen;
   transform: translate(-1px, -1px);
   filter: brightness(0) invert(1) drop-shadow(rgba(255,255,255,0.9) 0px 0px 0.5px);
@@ -2046,6 +2001,13 @@ const onSubmit = async () => {
   width: 100% !important;
   height: 100% !important;
   object-fit: contain;
+}
+
+/* Raster (image-based) template overlay – same engraved-ink look as the SVG version */
+.preview-template-img {
+  display: block;
+  mix-blend-mode: multiply;
+  filter: contrast(1.35) brightness(0.85) drop-shadow(rgba(0,0,0,0.75) 1px 2px 1.5px);
 }
 
 /* Engraved depth — diagonal light-to-dark gradient on top of template */
@@ -2148,10 +2110,6 @@ const onSubmit = async () => {
   object-fit: cover;
   object-position: center;
   border-radius: inherit;
-}
-
-.preview-template-img {
-  display: block;
 }
 
 .preview-sign {
