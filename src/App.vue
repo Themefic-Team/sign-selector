@@ -2762,7 +2762,7 @@ border: 1px solid var(--Border-Faint, #EEEEE7);
 	max-width: 416px !important;
 }
 .preview-sign {
-  filter: drop-shadow(6px 9px 8px #00000073);
+  filter: drop-shadow(6px 9px 5px #00000073);
 }
 
 
