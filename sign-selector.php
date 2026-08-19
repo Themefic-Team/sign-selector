@@ -3,7 +3,7 @@
 /**
  * Plugin Name:  Sign Selector 
  * Description:  A simple plugin to select and display a sign on your WordPress site. 
- * Version: 1.1.1
+ * Version: 2.0.1
  * Tested up to: 6.9
  * Author: Themefic
  * Author URI: https://themefic.com/
@@ -26,7 +26,7 @@ class SignSelector
     {
         // constants
         if (! defined('SIGN_SELECTOR_VERSION')) {
-            define('SIGN_SELECTOR_VERSION', '1.1.1');
+            define('SIGN_SELECTOR_VERSION', '2.0.1');
         }
         if (! defined('SIGN_SELECTOR_URL')) {
             define('SIGN_SELECTOR_URL', plugin_dir_url(__FILE__));
@@ -35,7 +35,7 @@ class SignSelector
             define('SIGN_SELECTOR_PATH', plugin_dir_path(__FILE__));
         }
         if (! defined('SIGN_SELECTOR_DEV_MODE')) {
-            define('SIGN_SELECTOR_DEV_MODE', false);
+            define('SIGN_SELECTOR_DEV_MODE', true);
         }
 
         // Admin settings

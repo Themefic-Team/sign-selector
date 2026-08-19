@@ -53,6 +53,7 @@ const designTemplates = toArray(cfg.designTemplates).map(t => ({
   ...t,
   price: 0,
   imageUrl: t.imageUrl || '',
+  combinationImages: (t.combinationImages && typeof t.combinationImages === 'object') ? t.combinationImages : {},
   textLayout: typeof t.textLayout === 'string' ? t.textLayout : '',
   fields: Array.isArray(t.fields) ? t.fields : [],
   shapeId: normalizeShapeId(t.shapeId) || 'all',
@@ -233,6 +234,18 @@ const getSlateColorsForShape = (shapeId) => {
   })
 }
 
+/**
+ * Resolves the correct template image URL for a given slate + paint combination.
+ * Falls back to the template's default imageUrl if no combination image is uploaded.
+ */
+const getTemplateImageForCombination = (template, slateId, paintId) => {
+  if (!template || !template.id) return ''
+  const key = `${slateId}_${paintId}`
+  const combo = template.combinationImages && template.combinationImages[key]
+  if (combo) return combo
+  return template.imageUrl || ''
+}
+
 export const useSignSelectorState = () => {
   const initialSignStyleId = resolveInitialId(signStyles, initialConfiguration?.sign?.style?.id, signStyles[0]?.id || '')
   const initialShapes = getShapesForSignStyle(initialSignStyleId)
@@ -328,36 +341,16 @@ export const useSignSelectorState = () => {
           : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        // backgroundSize: '160% auto',
-        // backgroundPosition: 'left -78px',
         backgroundRepeat: 'no-repeat'
       },
       signStyle: {
-        // backgroundColor: selectedSlateColor.value?.hex || '#2b3239',
         backgroundImage: getSlateColorImageUrl(selectedSlateColor.value, shapeIdForBg)
           ? `url("${getSlateColorImageUrl(selectedSlateColor.value, shapeIdForBg)}")`
           : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        color: selectedPaintColor.value.hex,
-        // boxShadow: '0 14px 28px rgba(0,0,0,0.25)'
-      },
-      textStyle: selectedPaintColor.value.imageUrl
-        ? {
-          color: selectedPaintColor.value.hex,
-          backgroundImage: `url("${selectedPaintColor.value.imageUrl}")`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          textShadow: 'none'
-        }
-        : {
-          color: selectedPaintColor.value.hex
-        }
+        backgroundRepeat: 'no-repeat'
+      }
     }
   })
 
@@ -539,6 +532,7 @@ export const useSignSelectorState = () => {
     payload,
     getSlateColorImageUrl,
     getSurfaceImageUrl,
+    getTemplateImageForCombination,
     isFirstStep: computed(() => state.currentStep === 1),
     isLastStep: computed(() => state.currentStep === totalSteps.value),
     setStep,

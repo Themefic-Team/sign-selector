@@ -17,6 +17,35 @@
 
   const uid = () => 'id-' + Math.random().toString(36).slice(2, 10);
 
+  /* ─── URL routing helpers ────────────────────────────── */
+
+  /**
+   * Read a single query-param from the current page URL.
+   * Works with WordPress admin URLs like:
+   *   /wp-admin/admin.php?page=sign-selector&tab=templates&template=abc&edit=1
+   */
+  const getUrlParam = (name) => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name) || '';
+  };
+
+  /**
+   * Update (or remove) query-params in the current URL without triggering
+   * a page reload.  Pass null/'' as a value to delete the param.
+   */
+  const setUrlParams = (updates) => {
+    const params = new URLSearchParams(window.location.search);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    });
+    const newUrl = window.location.pathname + '?' + params.toString();
+    history.replaceState(null, '', newUrl);
+  };
+
   const Toast = ({ message, type }) => {
     if (!message) return null;
     return el('div', { className: 'ss-toast' + (type === 'error' ? ' ss-toast-error' : '') }, message);
@@ -1136,39 +1165,43 @@
       editingIndex !== null && items[editingIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeEditor },
         el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
           el('h3', { className: 'ss-template-options-title' }, isAddingColor ? __('Add Slate Color', 'sign-selector') : __('Edit Slate Color', 'sign-selector')),
-          el('div', { className: 'ss-template-form-grid' },
-            el('div', { className: 'ss-template-options-section' },
-              el('h4', null, __('Basic Details', 'sign-selector')),
-              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
-              el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
-              el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
-              el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
-              el('label', { className: 'ss-template-field-label' }, __('Default Image', 'sign-selector')),
-              el(ImageUploadField, { value: items[editingIndex].imageUrl || '', onChange: (url) => updateField(editingIndex, 'imageUrl', url) }),
-              el('div', { className: 'ss-template-enabled-row' },
-                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
-                el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+          el('div', { className: 'ss-template-form-grid ss-slate-form-grid' },
+            // Left column: Basic Details + Shapes checklist stacked
+            el('div', { className: 'ss-slate-left-col' },
+              el('div', { className: 'ss-template-options-section ss-slate-basic-section' },
+                el('h4', null, __('Basic Details', 'sign-selector')),
+                el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+                el('input', { className: 'ss-input', value: items[editingIndex].id || '', onChange: (e) => updateField(editingIndex, 'id', e.target.value) }),
+                el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+                el('input', { className: 'ss-input', value: items[editingIndex].label || '', onChange: (e) => updateField(editingIndex, 'label', e.target.value) }),
+                el('label', { className: 'ss-template-field-label' }, __('Price ($)', 'sign-selector')),
+                el('input', { className: 'ss-input', type: 'number', step: '0.01', value: items[editingIndex].price ?? 0, onChange: (e) => updateField(editingIndex, 'price', e.target.value) }),
+                el('label', { className: 'ss-template-field-label' }, __('Default Image', 'sign-selector')),
+                el(ImageUploadField, { value: items[editingIndex].imageUrl || '', onChange: (url) => updateField(editingIndex, 'imageUrl', url) }),
+                el('div', { className: 'ss-template-enabled-row' },
+                  el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+                  el(Toggle, { checked: items[editingIndex].enabled !== false, onChange: (v) => updateField(editingIndex, 'enabled', v) })
+                ),
+                el('div', { className: 'ss-template-enabled-row', style: { marginTop: '8px' } },
+                  el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Default', 'sign-selector')),
+                  el(Toggle, { checked: Boolean(items[editingIndex].isDefault), onChange: (v) => updateField(editingIndex, 'isDefault', v) })
+                )
               ),
-              el('div', { className: 'ss-template-enabled-row', style: { marginTop: '8px' } },
-                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Default', 'sign-selector')),
-                el(Toggle, { checked: Boolean(items[editingIndex].isDefault), onChange: (v) => updateField(editingIndex, 'isDefault', v) })
-              )
-            ),
-            el('div', { className: 'ss-template-options-section ss-slate-shapes-section' },
-              el('h4', null, __('Show For Sizes & Shapes', 'sign-selector')),
-              shapeOptions.map((shape) =>
-                el('label', { key: shape.id, className: 'ss-template-option-check' },
-                  el('input', {
-                    type: 'checkbox',
-                    checked: getAssignedShapeIds(items[editingIndex]).includes(shape.id),
-                    onChange: (e) => toggleShape(editingIndex, shape.id, e.target.checked)
-                  }),
-                  getShapeDisplayLabel(shape.id)
+              el('div', { className: 'ss-template-options-section ss-slate-shapes-section' },
+                el('h4', null, __('Show For Sizes & Shapes', 'sign-selector')),
+                shapeOptions.map((shape) =>
+                  el('label', { key: shape.id, className: 'ss-template-option-check' },
+                    el('input', {
+                      type: 'checkbox',
+                      checked: getAssignedShapeIds(items[editingIndex]).includes(shape.id),
+                      onChange: (e) => toggleShape(editingIndex, shape.id, e.target.checked)
+                    }),
+                    getShapeDisplayLabel(shape.id)
+                  )
                 )
               )
             ),
+            // Right column: Shape-specific Images
             el('div', { className: 'ss-template-options-section ss-slate-images-section' },
               el('h4', null, __('Shape-specific Images', 'sign-selector')),
               el('div', { className: 'ss-shape-images-grid' },
@@ -1199,15 +1232,19 @@
 
   /* ─── Tab: Design Templates ───────────────────────────── */
 
-  const DesignTemplatesTab = () => {
+  const DesignTemplatesTab = ({ deepLinkTemplateId = '' }) => {
     const { items, setItems, loading, save, toast } = useCollection('/sign-selector/v1/design-templates');
     const { askRemove, confirmRemove, cancelRemove, pendingIndex, pendingLabel } = useConfirmRemove(items, setItems);
     const [shapeOptions, setShapeOptions] = useState([{ id: 'all', label: __('All Shapes', 'sign-selector') }, { id: 'none', label: __('No Shape', 'sign-selector') }]);
     const [signStyleOptions, setSignStyleOptions] = useState([]);
+    const [slateColorOptions, setSlateColorOptions] = useState([]);
+    const [paintColorOptions, setPaintColorOptions] = useState([]);
     const [editingTemplateIndex, setEditingTemplateIndex] = useState(null);
     const [isAddingTemplate, setIsAddingTemplate] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 8;
+    // Track whether we've already applied the deep-link (so it only fires once after items load)
+    const deepLinkApplied = { current: false };
 
     const templateFieldOptions = [
       { id: 'firstLine', label: __('First Line of Text', 'sign-selector') },
@@ -1233,11 +1270,30 @@
 
         setSignStyleOptions(options);
       }).catch(() => { });
+
+      apiFetch({ path: '/sign-selector/v1/slate-colors' }).then((data) => {
+        setSlateColorOptions((Array.isArray(data) ? data : []).filter((s) => s && s.id));
+      }).catch(() => { });
+
+      apiFetch({ path: '/sign-selector/v1/paint-colors' }).then((data) => {
+        setPaintColorOptions((Array.isArray(data) ? data : []).filter((p) => p && p.id));
+      }).catch(() => { });
     }, []);
 
     const updateField = (index, field, value) => {
       const next = [...items];
       next[index] = { ...next[index], [field]: value };
+      setItems(next);
+    };
+
+    const updateCombinationImage = (templateIndex, slateId, paintId, url) => {
+      const next = [...items];
+      const key = `${slateId}_${paintId}`;
+      const existing = next[templateIndex].combinationImages || {};
+      next[templateIndex] = {
+        ...next[templateIndex],
+        combinationImages: { ...existing, [key]: url }
+      };
       setItems(next);
     };
 
@@ -1322,12 +1378,30 @@
     const openTemplateOptions = (index) => {
       setIsAddingTemplate(false);
       setEditingTemplateIndex(index);
+      // Reflect in URL so the modal is deep-linkable
+      const templateId = items[index]?.id || '';
+      if (templateId) {
+        setUrlParams({ template: templateId, edit: '1' });
+      }
     };
 
     const closeTemplateOptions = () => {
       setEditingTemplateIndex(null);
       setIsAddingTemplate(false);
+      // Remove template deep-link params from URL
+      setUrlParams({ template: null, edit: null });
     };
+
+    // Auto-open the edit modal when a deep-link template ID is provided
+    useEffect(() => {
+      if (!deepLinkTemplateId || loading || deepLinkApplied.current || !items.length) return;
+      const idx = items.findIndex((item) => item.id === deepLinkTemplateId);
+      if (idx !== -1) {
+        deepLinkApplied.current = true;
+        setEditingTemplateIndex(idx);
+        setIsAddingTemplate(false);
+      }
+    }, [deepLinkTemplateId, loading, items]);
 
     const getStyleSummary = (item) => {
       const assignedIds = getAssignedSignStyleIds(item);
@@ -1383,7 +1457,7 @@
         fields: ['houseNumber'],
         textLayout: 'number',
         imageUrl: '',
-        svgCode: '',
+        combinationImages: {},
         enabled: true
       }];
 
@@ -1394,7 +1468,7 @@
     };
 
     const saveTemplates = () => {
-      const normalized = items.map(({ images, price, ...item }) => {
+      const normalized = items.map(({ images, price, svgCode, ...item }) => {
         const fields = getTemplateFields(item);
 
         return {
@@ -1406,7 +1480,8 @@
             : signStyleOptions.map((style) => style.id),
           fields,
           textLayout: inferTextLayout(fields),
-          imageUrl: item.imageUrl || ''
+          imageUrl: item.imageUrl || '',
+          combinationImages: (item.combinationImages && typeof item.combinationImages === 'object') ? item.combinationImages : {}
         };
       });
 
@@ -1414,6 +1489,117 @@
     };
 
     if (loading) return el('p', null, __('Loading…', 'sign-selector'));
+
+    if (editingTemplateIndex !== null && items[editingTemplateIndex]) {
+      return el('div', { className: 'ss-template-editor-view' },
+        el('div', { className: 'ss-template-editor-header' },
+          el('div', null,
+            el('h3', { className: 'ss-template-options-title' }, isAddingTemplate ? __('Add Template', 'sign-selector') : __('Edit Template', 'sign-selector')),
+            el('p', { className: 'ss-template-options-subtitle' }, items[editingTemplateIndex].label || items[editingTemplateIndex].id || __('Template', 'sign-selector'))
+          ),
+          el('button', { className: 'ss-btn ss-btn-primary', onClick: closeTemplateOptions }, __('Done', 'sign-selector'))
+        ),
+        el('div', { className: 'ss-template-form-grid' },
+          el('div', { className: 'ss-template-options-section' },
+            el('h4', null, __('Basic Details', 'sign-selector')),
+            el('label', { className: 'ss-template-field-label' }, __('Default / Fallback Image (Black Reference)', 'sign-selector')),
+            el(ImageUploadField, { value: items[editingTemplateIndex].imageUrl || '', onChange: (url) => updateField(editingTemplateIndex, 'imageUrl', url) }),
+            el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
+            el('input', {
+              className: 'ss-input',
+              value: items[editingTemplateIndex].id || '',
+              onChange: (e) => updateField(editingTemplateIndex, 'id', e.target.value)
+            }),
+            el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
+            el('input', {
+              className: 'ss-input',
+              value: items[editingTemplateIndex].label || '',
+              onChange: (e) => updateField(editingTemplateIndex, 'label', e.target.value)
+            }),
+            el('label', { className: 'ss-template-field-label' }, __('Tier', 'sign-selector')),
+            el('select', {
+              className: 'ss-input',
+              value: items[editingTemplateIndex].tier || 'Standard',
+              onChange: (e) => updateField(editingTemplateIndex, 'tier', e.target.value)
+            },
+              el('option', { value: 'Deluxe' }, 'Deluxe'),
+              el('option', { value: 'Standard' }, 'Standard')
+            ),
+            el('label', { className: 'ss-template-field-label' }, __('Shape', 'sign-selector')),
+            el('select', {
+              className: 'ss-input',
+              value: items[editingTemplateIndex].shapeId || 'all',
+              onChange: (e) => updateField(editingTemplateIndex, 'shapeId', e.target.value)
+            },
+              shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+            ),
+            el('label', { className: 'ss-template-field-label' }, __('Surface Background Variant', 'sign-selector')),
+            el('select', {
+              className: 'ss-input',
+              value: items[editingTemplateIndex].surfaceVariant || '',
+              onChange: (e) => updateField(editingTemplateIndex, 'surfaceVariant', e.target.value)
+            },
+              el('option', { value: '' }, __('Default (Based on Shape)', 'sign-selector')),
+              shapeOptions.filter(s => s.id !== 'all' && s.id !== 'none').map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
+            ),
+            el('div', { className: 'ss-template-enabled-row' },
+              el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
+              el(Toggle, { checked: items[editingTemplateIndex].enabled !== false, onChange: (v) => updateField(editingTemplateIndex, 'enabled', v) })
+            )
+          ),
+          el('div', { className: 'ss-template-options-section' },
+            el('h4', null, __('Sign Styles', 'sign-selector')),
+            signStyleOptions.map((style) =>
+              el('label', { key: style.id, className: 'ss-template-option-check' },
+                el('input', {
+                  type: 'checkbox',
+                  checked: getAssignedSignStyleIds(items[editingTemplateIndex]).includes(style.id),
+                  onChange: (e) => toggleSignStyle(editingTemplateIndex, style.id, e.target.checked)
+                }),
+                style.label
+              )
+            )
+          ),
+          el('div', { className: 'ss-template-options-section' },
+            el('h4', null, __('Text Fields', 'sign-selector')),
+            templateFieldOptions.map((field) =>
+              el('label', { key: field.id, className: 'ss-template-option-check' },
+                el('input', {
+                  type: 'checkbox',
+                  checked: getTemplateFields(items[editingTemplateIndex]).includes(field.id),
+                  onChange: (e) => toggleTemplateField(editingTemplateIndex, field.id, e.target.checked)
+                }),
+                field.label
+              )
+            )
+          ),
+          el('div', { className: 'ss-template-options-section ss-combo-images-section' },
+            el('h4', null, __('Combination Images (Slate × Paint)', 'sign-selector')),
+            el('p', { className: 'ss-combo-images-hint' },
+              __('Upload a pre-rendered PNG for each Slate Color + Paint Color combination. Leave blank to use the Default image above.', 'sign-selector')
+            ),
+            slateColorOptions.length === 0 || paintColorOptions.length === 0
+              ? el('p', { className: 'ss-combo-loading' }, __('Loading color options…', 'sign-selector'))
+              : slateColorOptions.map((slate) =>
+                  el('div', { key: slate.id, className: 'ss-combo-slate-group' },
+                    el('h5', { className: 'ss-combo-slate-label' }, slate.label || slate.id),
+                    el('div', { className: 'ss-combo-paint-row' },
+                      paintColorOptions.map((paint) =>
+                        el('div', { key: paint.id, className: 'ss-combo-paint-item' },
+                          el('label', { className: 'ss-template-field-label' }, paint.label || paint.id),
+                          el(ImageUploadField, {
+                            value: ((items[editingTemplateIndex].combinationImages || {})[`${slate.id}_${paint.id}`]) || '',
+                            onChange: (url) => updateCombinationImage(editingTemplateIndex, slate.id, paint.id, url)
+                          })
+                        )
+                      )
+                    )
+                  )
+                )
+          )
+        )
+      );
+    }
 
     return el(Fragment, null,
       el('div', { className: 'ss-toolbar' },
@@ -1436,11 +1622,9 @@
           paginatedTemplateEntries.map(({ item, index }) =>
             el('tr', { key: item.id || index },
               el('td', null,
-                item.svgCode && item.svgCode.trim()
-                  ? el('div', { className: 'ss-img-preview ss-svg-template-preview', dangerouslySetInnerHTML: { __html: item.svgCode } })
-                  : item.imageUrl
-                    ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label || item.id || 'Template preview' })
-                    : el('div', { className: 'ss-img-preview ss-img-preview-empty' })
+                item.imageUrl
+                  ? el('img', { className: 'ss-img-preview', src: item.imageUrl, alt: item.label || item.id || 'Template preview' })
+                  : el('div', { className: 'ss-img-preview ss-img-preview-empty' })
               ),
               el('td', null,
                 el('div', { className: 'ss-template-meta' },
@@ -1498,102 +1682,6 @@
         el('button', { className: 'ss-btn ss-btn-primary', onClick: saveTemplates }, __('Save Templates', 'sign-selector'))
       ),
       el(Toast, toast),
-      editingTemplateIndex !== null && items[editingTemplateIndex] && el('div', { className: 'ss-modal-overlay', onClick: closeTemplateOptions },
-        el('div', { className: 'ss-modal ss-template-options-modal', onClick: (e) => e.stopPropagation() },
-          el('h3', { className: 'ss-template-options-title' }, isAddingTemplate ? __('Add Template', 'sign-selector') : __('Edit Template', 'sign-selector')),
-          el('p', { className: 'ss-template-options-subtitle' }, items[editingTemplateIndex].label || items[editingTemplateIndex].id || __('Template', 'sign-selector')),
-          el('div', { className: 'ss-template-form-grid' },
-            el('div', { className: 'ss-template-options-section' },
-              el('h4', null, __('Basic Details', 'sign-selector')),
-              items[editingTemplateIndex].svgCode && items[editingTemplateIndex].svgCode.trim()
-                ? el('div', { className: 'ss-img-preview ss-template-modal-preview ss-svg-template-preview', dangerouslySetInnerHTML: { __html: items[editingTemplateIndex].svgCode } })
-                : null,
-              el('label', { className: 'ss-template-field-label' }, __('Image', 'sign-selector')),
-              el(ImageUploadField, { value: items[editingTemplateIndex].imageUrl || '', onChange: (url) => updateField(editingTemplateIndex, 'imageUrl', url) }),
-              el('label', { className: 'ss-template-field-label' }, __('SVG Code (overrides image when provided)', 'sign-selector')),
-              el('textarea', {
-                className: 'ss-input ss-svg-textarea',
-                rows: 6,
-                placeholder: '<svg ...>...</svg>',
-                value: items[editingTemplateIndex].svgCode || '',
-                onChange: (e) => updateField(editingTemplateIndex, 'svgCode', e.target.value)
-              }),
-              el('label', { className: 'ss-template-field-label' }, __('ID', 'sign-selector')),
-              el('input', {
-                className: 'ss-input',
-                value: items[editingTemplateIndex].id || '',
-                onChange: (e) => updateField(editingTemplateIndex, 'id', e.target.value)
-              }),
-              el('label', { className: 'ss-template-field-label' }, __('Label', 'sign-selector')),
-              el('input', {
-                className: 'ss-input',
-                value: items[editingTemplateIndex].label || '',
-                onChange: (e) => updateField(editingTemplateIndex, 'label', e.target.value)
-              }),
-              el('label', { className: 'ss-template-field-label' }, __('Tier', 'sign-selector')),
-              el('select', {
-                className: 'ss-input',
-                value: items[editingTemplateIndex].tier || 'Standard',
-                onChange: (e) => updateField(editingTemplateIndex, 'tier', e.target.value)
-              },
-                el('option', { value: 'Deluxe' }, 'Deluxe'),
-                el('option', { value: 'Standard' }, 'Standard')
-              ),
-              el('label', { className: 'ss-template-field-label' }, __('Shape', 'sign-selector')),
-              el('select', {
-                className: 'ss-input',
-                value: items[editingTemplateIndex].shapeId || 'all',
-                onChange: (e) => updateField(editingTemplateIndex, 'shapeId', e.target.value)
-              },
-                shapeOptions.map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
-              ),
-              el('label', { className: 'ss-template-field-label' }, __('Surface Background Variant', 'sign-selector')),
-              el('select', {
-                className: 'ss-input',
-                value: items[editingTemplateIndex].surfaceVariant || '',
-                onChange: (e) => updateField(editingTemplateIndex, 'surfaceVariant', e.target.value)
-              },
-                el('option', { value: '' }, __('Default (Based on Shape)', 'sign-selector')),
-                shapeOptions.filter(s => s.id !== 'all' && s.id !== 'none').map((shape) => el('option', { key: shape.id, value: shape.id }, shape.label))
-              ),
-              el('div', { className: 'ss-template-enabled-row' },
-                el('span', { className: 'ss-template-field-label ss-template-field-label-inline' }, __('Enabled', 'sign-selector')),
-                el(Toggle, { checked: items[editingTemplateIndex].enabled !== false, onChange: (v) => updateField(editingTemplateIndex, 'enabled', v) })
-              )
-            ),
-            el('div', { className: 'ss-template-options-section' },
-              el('h4', null, __('Sign Styles', 'sign-selector')),
-              signStyleOptions.map((style) =>
-                el('label', { key: style.id, className: 'ss-template-option-check' },
-                  el('input', {
-                    type: 'checkbox',
-                    checked: getAssignedSignStyleIds(items[editingTemplateIndex]).includes(style.id),
-                    onChange: (e) => toggleSignStyle(editingTemplateIndex, style.id, e.target.checked)
-                  }),
-                  style.label
-                )
-              )
-            ),
-            el('div', { className: 'ss-template-options-section' },
-              el('h4', null, __('Text Fields', 'sign-selector')),
-              templateFieldOptions.map((field) =>
-                el('label', { key: field.id, className: 'ss-template-option-check' },
-                  el('input', {
-                    type: 'checkbox',
-                    checked: getTemplateFields(items[editingTemplateIndex]).includes(field.id),
-                    onChange: (e) => toggleTemplateField(editingTemplateIndex, field.id, e.target.checked)
-                  }),
-                  field.label
-                )
-              )
-            )
-          ),
-          el('div', { className: 'ss-modal-actions' },
-            el('button', { className: 'ss-btn', onClick: closeTemplateOptions }, __('Close', 'sign-selector')),
-            el('button', { className: 'ss-btn ss-btn-primary', onClick: closeTemplateOptions }, __('Done', 'sign-selector'))
-          )
-        )
-      ),
       pendingIndex !== null && el(ConfirmModal, {
         message: __('Are you sure you want to remove', 'sign-selector') + ' "' + pendingLabel + '"?',
         onConfirm: confirmRemove,
@@ -1964,8 +2052,34 @@
   ];
 
   const App = () => {
-    const [activeTab, setActiveTab] = useState('steps');
+    // Initialise from URL on first render (e.g. ?tab=templates)
+    const initialTab = (() => {
+      const urlTab = getUrlParam('tab');
+      return TABS.find(t => t.key === urlTab) ? urlTab : 'steps';
+    })();
+
+    const [activeTab, setActiveTab] = useState(initialTab);
+
+    // Read deep-link params once (tab + template id + edit flag)
+    const deepLinkTemplateId = getUrlParam('template');
+    const isEditDeepLink = getUrlParam('edit') === '1';
+
+    const handleTabChange = (key) => {
+      setActiveTab(key);
+      // Sync tab to URL; clear template/edit params when leaving templates tab
+      if (key !== 'templates') {
+        setUrlParams({ tab: key, template: null, edit: null });
+      } else {
+        setUrlParams({ tab: key });
+      }
+    };
+
     const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || StepsTab;
+
+    // Build props for the active component (only DesignTemplatesTab uses deepLinkTemplateId)
+    const activeProps = (activeTab === 'templates' && isEditDeepLink && deepLinkTemplateId)
+      ? { deepLinkTemplateId }
+      : {};
 
     return el('div', { id: 'sign-selector-admin-app' },
       el('div', { className: 'ss-admin-header' },
@@ -1976,12 +2090,12 @@
           el('button', {
             key: tab.key,
             className: 'ss-tab' + (activeTab === tab.key ? ' active' : ''),
-            onClick: () => setActiveTab(tab.key)
+            onClick: () => handleTabChange(tab.key)
           }, tab.label)
         )
       ),
       el('div', { className: 'ss-section' },
-        el(ActiveComponent)
+        el(ActiveComponent, activeProps)
       )
     );
   };
