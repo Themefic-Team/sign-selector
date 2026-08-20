@@ -1,0 +1,361 @@
+/* ============================================================
+   Sign Selector — Import Template Images
+   Admin page stylesheet
+   ============================================================ */
+
+/* ── Wrap ─────────────────────────────────────────────────── */
+.ss-import-wrap {
+    max-width: 900px;
+    margin: 24px auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+}
+
+/* ── Title ─────────────────────────────────────────────────── */
+.ss-import-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1d2327;
+    margin-bottom: 6px;
+}
+
+.ss-import-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.ss-import-description {
+    color: #50575e;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.ss-import-structure-card,
+.ss-import-form-card,
+.ss-import-progress-card,
+.ss-import-summary-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.ss-import-structure-card h3,
+.ss-import-form-card h3,
+.ss-import-progress-card h3,
+.ss-import-summary-card h3 {
+    margin-top: 0;
+    margin-bottom: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+/* ── Structure tree ────────────────────────────────────────── */
+.ss-import-tree {
+    background: #f6f7f7;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: #3c434a;
+    margin: 0;
+    overflow-x: auto;
+}
+
+/* ── Dropzone ──────────────────────────────────────────────── */
+.ss-import-dropzone {
+    border: 2px dashed #c3c4c7;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    margin-bottom: 20px;
+    background: #fafafa;
+}
+
+.ss-import-dropzone.ss-drop-active,
+.ss-import-dropzone:hover {
+    border-color: #2271b1;
+    background: #f0f6fc;
+}
+
+.ss-import-dropzone.ss-has-file {
+    border-color: #1d8348;
+    background: #eafaf1;
+}
+
+.ss-import-dropzone-inner {
+    pointer-events: none;
+}
+
+.ss-import-dropzone label {
+    pointer-events: all;
+    cursor: pointer;
+}
+
+.ss-dropzone-icon {
+    font-size: 2.8rem;
+    display: block;
+    margin-bottom: 10px;
+    color: #50575e;
+}
+
+.ss-dropzone-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1d2327;
+    margin: 0 0 4px;
+}
+
+.ss-dropzone-sub {
+    font-size: 12px;
+    color: #8c8f94;
+    margin: 0 0 12px;
+}
+
+.ss-hidden-file-input {
+    display: none;
+}
+
+.ss-selected-filename {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #1d8348;
+    font-weight: 500;
+    min-height: 18px;
+}
+
+/* ── Options ───────────────────────────────────────────────── */
+.ss-import-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.ss-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #1d2327;
+    cursor: pointer;
+}
+
+.ss-checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #2271b1;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.ss-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    transition: background .15s, box-shadow .15s, opacity .15s;
+}
+
+.ss-btn-primary {
+    background: #2271b1;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+
+.ss-btn-primary:hover {
+    background: #135e96;
+    color: #fff;
+}
+
+.ss-btn-primary:disabled {
+    opacity: .6;
+    cursor: not-allowed;
+}
+
+.ss-btn-lg {
+    padding: 12px 28px;
+    font-size: 14px;
+    border-radius: 6px;
+}
+
+/* ── Progress bar ──────────────────────────────────────────── */
+.ss-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.ss-progress-header h3 {
+    margin: 0;
+}
+
+.ss-progress-count {
+    font-size: 13px;
+    color: #50575e;
+    font-weight: 600;
+}
+
+.ss-progress-bar-wrap {
+    background: #f0f0f1;
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.ss-progress-bar {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #2271b1, #3aacfc);
+    border-radius: 6px;
+    transition: width .3s ease;
+}
+
+/* ── Import log ────────────────────────────────────────────── */
+.ss-import-log {
+    background: #1d2327;
+    border-radius: 6px;
+    padding: 14px 16px;
+    max-height: 260px;
+    overflow-y: auto;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.ss-log-line {
+    margin: 0;
+    padding: 1px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.ss-log-info    { color: #adb5bd; }
+.ss-log-success { color: #52d48a; }
+.ss-log-warn    { color: #f0ad4e; }
+.ss-log-error   { color: #ff6b6b; }
+
+/* ── Summary stats ─────────────────────────────────────────── */
+.ss-summary-stats {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+.ss-stat {
+    flex: 1 1 120px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: center;
+}
+
+.ss-stat-success { border-left: 4px solid #1d8348; }
+.ss-stat-warn    { border-left: 4px solid #f0ad4e; }
+.ss-stat-error   { border-left: 4px solid #b32d2e; }
+
+.ss-stat-count {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1d2327;
+    line-height: 1.1;
+}
+
+.ss-stat-label {
+    display: block;
+    font-size: 12px;
+    color: #50575e;
+    margin-top: 4px;
+}
+
+/* ── Results table ─────────────────────────────────────────── */
+.ss-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.ss-results-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border-bottom: 2px solid #dcdcde;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.ss-results-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f1;
+    vertical-align: top;
+    color: #3c434a;
+}
+
+.ss-row-success { background: #f0faf4; }
+.ss-row-skipped { background: #fefdf0; }
+.ss-row-no_match,
+.ss-row-error   { background: #fff5f5; }
+
+/* ── Badges ────────────────────────────────────────────────── */
+.ss-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ss-badge-success  { background: #d4edda; color: #155724; }
+.ss-badge-skipped  { background: #fff3cd; color: #856404; }
+.ss-badge-no_match { background: #fff3cd; color: #856404; }
+.ss-badge-error    { background: #f8d7da; color: #842029; }
+
+/* ── Inline alert ──────────────────────────────────────────── */
+.ss-inline-alert {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 14px;
+    animation: ss-fadein .2s ease;
+}
+
+.ss-inline-alert-error {
+    background: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
+}
+
+.ss-inline-alert-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+@keyframes ss-fadein {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

@@ -43,6 +43,10 @@ class Sign_Selector_Admin {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         // add_action( 'admin_init', array( $this, 'maybe_seed_defaults' ) );
+
+        // Bulk image importer
+        require_once __DIR__ . '/class-sign-selector-importer.php';
+        new Sign_Selector_Importer();
     }
 
     /* ─── Admin menu ────────────────────────────────────────── */
@@ -57,6 +61,17 @@ class Sign_Selector_Admin {
             'dashicons-art',
             58
         );
+
+        // Import submenu (rendered by Sign_Selector_Importer — registered there)
+        // We add a duplicate parent entry so it appears in the submenu list as "Configurator"
+        add_submenu_page(
+            'sign-selector',
+            __( 'Configurator Settings', 'sign-selector' ),
+            __( 'Configurator', 'sign-selector' ),
+            'manage_options',
+            'sign-selector',
+            array( $this, 'render_admin_page' )
+        );
     }
 
     public function render_admin_page() {
@@ -64,7 +79,11 @@ class Sign_Selector_Admin {
     }
 
     public function enqueue_admin_assets( $hook ) {
-        if ( 'toplevel_page_sign-selector' !== $hook ) {
+        $is_main_page = 'toplevel_page_sign-selector' === $hook;
+        // Also handle the duplicate submenu entry for the configurator
+        $is_configurator_sub = 'sign-selector_page_sign-selector' === $hook;
+
+        if ( ! $is_main_page && ! $is_configurator_sub ) {
             return;
         }
 

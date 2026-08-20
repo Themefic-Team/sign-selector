@@ -3,7 +3,7 @@
 /**
  * Plugin Name:  Sign Selector 
  * Description:  A simple plugin to select and display a sign on your WordPress site. 
- * Version: 2.0.1
+ * Version: 2.0.2
  * Tested up to: 6.9
  * Author: Themefic
  * Author URI: https://themefic.com/
@@ -26,7 +26,7 @@ class SignSelector
     {
         // constants
         if (! defined('SIGN_SELECTOR_VERSION')) {
-            define('SIGN_SELECTOR_VERSION', '2.0.1');
+            define('SIGN_SELECTOR_VERSION', '2.0.2');
         }
         if (! defined('SIGN_SELECTOR_URL')) {
             define('SIGN_SELECTOR_URL', plugin_dir_url(__FILE__));
@@ -35,7 +35,7 @@ class SignSelector
             define('SIGN_SELECTOR_PATH', plugin_dir_path(__FILE__));
         }
         if (! defined('SIGN_SELECTOR_DEV_MODE')) {
-            define('SIGN_SELECTOR_DEV_MODE', false);
+            define('SIGN_SELECTOR_DEV_MODE', true);
         }
 
         // Admin settings
@@ -43,8 +43,20 @@ class SignSelector
 
         add_action('init', array($this, 'init'));
     }
+
+    /**
+     * Add WebP to allowed mime types
+     */
+    public function allow_webp_uploads($mimes)
+    {
+        $mimes['webp'] = 'image/webp';
+        return $mimes;
+    }
+
     public function init()
     {
+        add_filter('upload_mimes', array($this, 'allow_webp_uploads'));
+
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
         add_filter('script_loader_tag', [$this, 'tf_loadScriptAsModule'], 10, 3);
         add_shortcode('sign_selector', [$this, 'render_shortcode']);
@@ -935,7 +947,7 @@ class SignSelector
             return $result;
         }
 
-        if (! preg_match('/^data:image\/(png|jpe?g);base64,(.+)$/', $preview_data_url, $matches)) {
+        if (! preg_match('/^data:image\/(png|jpe?g|webp);base64,(.+)$/', $preview_data_url, $matches)) {
             return $result;
         }
 
