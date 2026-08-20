@@ -216,6 +216,13 @@ const templateImageUrl = computed(() => {
   )
 })
 
+const isImageLoading = ref(true)
+watch(templateImageUrl, (newUrl) => {
+  if (newUrl) {
+    isImageLoading.value = true
+  }
+})
+
 const previewSurfaceUrl = computed(() => {
   const bgImage = preview.value.surfaceStyle?.backgroundImage || ''
   const match = bgImage.match(/url\(["']?([^"')]+)["']?\)/)
@@ -665,12 +672,18 @@ const onSubmit = async () => {
             <img loading="lazy" v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <img loading="lazy" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="templateImageUrl && isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
               <div v-else class="preview-placeholder">
                 Select surface to show preview
@@ -841,12 +854,18 @@ const onSubmit = async () => {
             <img loading="lazy" v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <img loading="lazy" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="templateImageUrl && isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
               <div v-else class="preview-placeholder">
                 Select surface to show preview
@@ -941,12 +960,18 @@ const onSubmit = async () => {
             <img loading="lazy" v-if="previewSurfaceUrl" class="preview-surface-img" :src="previewSurfaceUrl" alt="" />
             <template v-if="isNoShapeFlow">
               <div v-if="templateImageUrl" class="preview-no-shape-sign" :style="noShapePreviewStyle">
-                <img loading="lazy" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
             </template>
             <template v-else>
               <div v-if="selectedShape?.id" class="preview-sign" :style="[preview.signStyle, getPreviewShapeStyle(selectedShape)]">
-                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" />
+                <img loading="lazy" v-if="templateImageUrl" class="preview-combination-img" :class="{ 'is-loading': isImageLoading }" :src="templateImageUrl" :alt="selectedTemplate?.label || ''" @load="isImageLoading = false" @error="isImageLoading = false" />
+                <div v-if="templateImageUrl && isImageLoading" class="preview-loader-overlay">
+                  <span class="preview-spinner"></span>
+                </div>
               </div>
               <div v-else class="preview-placeholder">
                 Select surface to show preview
@@ -2024,6 +2049,37 @@ const onSubmit = async () => {
   object-position: center;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.22);
   border-radius: inherit;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.preview-combination-img.is-loading {
+  opacity: 0.3;
+}
+
+.preview-loader-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.preview-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: #615dd0;
+  border-radius: 50%;
+  animation: preview-spin 1s linear infinite;
+}
+
+@keyframes preview-spin {
+  to { transform: rotate(360deg); }
 }
 
 .preview-sign.oval_cottage,
