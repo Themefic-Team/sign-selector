@@ -497,13 +497,13 @@ class Sign_Selector_Importer {
         }
 
         if ( $folder_name ) {
-            $normalized_folder = str_replace( array( '"', "'" ), '', strtolower( $folder_name ) );
-            $normalized_folder = preg_replace( '/\s+/', ' ', trim( $normalized_folder ) );
+            // Strip all non-alphanumeric characters for a resilient match
+            // e.g. '9 1/4"' and '9 14' both become '914'
+            $normalized_folder = preg_replace( '/[^a-z0-9]/i', '', strtolower( $folder_name ) );
 
             foreach ( $templates as $idx => $tpl ) {
                 if ( isset( $tpl['label'] ) ) {
-                    $normalized_label = str_replace( array( '"', "'" ), '', strtolower( $tpl['label'] ) );
-                    $normalized_label = preg_replace( '/\s+/', ' ', trim( $normalized_label ) );
+                    $normalized_label = preg_replace( '/[^a-z0-9]/i', '', strtolower( $tpl['label'] ) );
 
                     if ( $normalized_label === $normalized_folder ) {
                         return $idx;
@@ -545,9 +545,13 @@ class Sign_Selector_Importer {
 
         // Template not found
         if ( false === $tpl_idx ) {
+            $msg = $tpl_id 
+                ? sprintf( 'No design template found with id "%s" or matching label.', esc_html( $tpl_id ) )
+                : sprintf( 'No design template found matching label "%s".', esc_html( $folder_name ) );
+
             return array_merge( $base_result, array(
                 'status'  => 'no_match',
-                'message' => sprintf( 'No design template found with id "%s".', esc_html( $tpl_id ) ),
+                'message' => $msg,
             ) );
         }
 
