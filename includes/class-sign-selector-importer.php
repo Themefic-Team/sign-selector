@@ -24,8 +24,9 @@ defined( 'ABSPATH' ) || exit;
 
 class Sign_Selector_Importer {
 
-    /** AJAX action name */
-    const AJAX_ACTION = 'sign_selector_import_zip';
+    const AJAX_ACTION_UPLOAD        = 'sign_selector_import_upload';
+    const AJAX_ACTION_PROCESS_BATCH = 'sign_selector_import_process_batch';
+    const AJAX_ACTION_CLEANUP       = 'sign_selector_import_cleanup';
 
     /** Nonce name */
     const NONCE_KEY = 'sign_selector_import_nonce';
@@ -42,7 +43,9 @@ class Sign_Selector_Importer {
     public function __construct() {
         add_action( 'admin_menu',            array( $this, 'add_submenu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-        add_action( 'wp_ajax_' . self::AJAX_ACTION, array( $this, 'handle_import' ) );
+        add_action( 'wp_ajax_' . self::AJAX_ACTION_UPLOAD, array( $this, 'handle_upload_zip' ) );
+        add_action( 'wp_ajax_' . self::AJAX_ACTION_PROCESS_BATCH, array( $this, 'handle_process_batch' ) );
+        add_action( 'wp_ajax_' . self::AJAX_ACTION_CLEANUP, array( $this, 'handle_cleanup' ) );
     }
 
     /* --- Admin menu --- */
@@ -86,10 +89,12 @@ class Sign_Selector_Importer {
             'sign-selector-importer-js',
             'SS_IMPORTER',
             array(
-                'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
-                'action'     => self::AJAX_ACTION,
-                'nonce'      => wp_create_nonce( self::NONCE_KEY ),
-                'maxSizeMB'  => (int) ( wp_max_upload_size() / ( 1024 * 1024 ) ),
+                'ajaxUrl'            => admin_url( 'admin-ajax.php' ),
+                'actionUpload'       => self::AJAX_ACTION_UPLOAD,
+                'actionProcessBatch' => self::AJAX_ACTION_PROCESS_BATCH,
+                'actionCleanup'      => self::AJAX_ACTION_CLEANUP,
+                'nonce'              => wp_create_nonce( self::NONCE_KEY ),
+                'maxSizeMB'          => (int) ( wp_max_upload_size() / ( 1024 * 1024 ) ),
             )
         );
     }
@@ -187,15 +192,13 @@ class Sign_Selector_Importer {
 
     /* --- AJAX handler --- */
 
-    public function handle_import() {
-        // Security checks
+    public function handle_upload_zip() {
         check_ajax_referer( self::NONCE_KEY, 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
         }
 
-        // Validate uploaded file
         if ( empty( $_FILES['zip_file'] ) || ! isset( $_FILES['zip_file']['tmp_name'] ) ) {
             wp_send_json_error( array( 'message' => 'No ZIP file received.' ), 400 );
         }
@@ -206,9 +209,6 @@ class Sign_Selector_Importer {
             wp_send_json_error( array( 'message' => 'Upload error code: ' . (int) $file['error'] ), 400 );
         }
 
-        $overwrite         = ! empty( $_POST['overwrite'] );
-        $skip_media        = ! empty( $_POST['skip_media_library'] );
-
         // Extract ZIP to temp dir
         $extract_dir = $this->extract_zip( $file['tmp_name'] );
         if ( is_wp_error( $extract_dir ) ) {
@@ -216,18 +216,40 @@ class Sign_Selector_Importer {
         }
 
         // Scan the tree and collect import tasks
-        $tasks   = $this->scan_tree( $extract_dir );
-        $results = array();
+        $tasks = $this->scan_tree( $extract_dir );
 
-        // Load existing design templates
+        wp_send_json_success( array(
+            'extract_dir' => $extract_dir,
+            'tasks'       => $tasks,
+            'total_tasks' => count( $tasks ),
+        ) );
+    }
+
+    public function handle_process_batch() {
+        check_ajax_referer( self::NONCE_KEY, 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+        }
+
+        $raw_tasks   = stripslashes( $_POST['tasks'] ?? '[]' );
+        $tasks       = json_decode( $raw_tasks, true );
+        $overwrite   = ! empty( $_POST['overwrite'] );
+        $skip_media  = ! empty( $_POST['skip_media_library'] );
+
+        if ( ! is_array( $tasks ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid tasks provided.' ), 400 );
+        }
+
+        $results = array();
         $templates = $this->get_templates();
 
-        // Ensure WP media functions are available
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
         $counts = array( 'success' => 0, 'skipped' => 0, 'error' => 0, 'no_match' => 0 );
+        $templates_changed = false;
 
         foreach ( $tasks as $task ) {
             $result = $this->process_task( $task, $templates, $overwrite, $skip_media );
@@ -241,15 +263,14 @@ class Sign_Selector_Importer {
                     $paint = $result['paint'];
                     $url   = $result['url'];
 
-                    // Key format matches admin.js: "{slateId}_{paintId}"
                     $combo_key = $slate . '_' . $paint;
-
                     $existing = isset( $templates[ $tpl_idx ]['combinationImages'] )
                         ? (array) $templates[ $tpl_idx ]['combinationImages']
                         : array();
 
                     $existing[ $combo_key ] = $url;
                     $templates[ $tpl_idx ]['combinationImages'] = $existing;
+                    $templates_changed = true;
                 }
             } elseif ( 'skipped' === $result['status'] ) {
                 $counts['skipped']++;
@@ -260,30 +281,44 @@ class Sign_Selector_Importer {
             }
         }
 
-        // Persist updated templates back to wp_options
-        $encoded = wp_json_encode( array_values( $templates ) );
-        $saved   = update_option( self::OPT_DESIGN_TEMPLATES, $encoded, false );
-        wp_cache_delete( self::OPT_DESIGN_TEMPLATES, 'options' );
-
-        // If update_option returns false it may mean the value was already
-        // identical - force a direct DB write to guarantee persistence.
-        if ( ! $saved ) {
-            global $wpdb;
-            $wpdb->update(
-                $wpdb->options,
-                array( 'option_value' => $encoded ),
-                array( 'option_name'  => self::OPT_DESIGN_TEMPLATES )
-            );
+        if ( $templates_changed ) {
+            $encoded = wp_json_encode( array_values( $templates ) );
+            $saved   = update_option( self::OPT_DESIGN_TEMPLATES, $encoded, false );
             wp_cache_delete( self::OPT_DESIGN_TEMPLATES, 'options' );
-        }
 
-        // Cleanup
-        $this->cleanup_dir( $extract_dir );
+            if ( ! $saved ) {
+                global $wpdb;
+                $wpdb->update(
+                    $wpdb->options,
+                    array( 'option_value' => $encoded ),
+                    array( 'option_name'  => self::OPT_DESIGN_TEMPLATES )
+                );
+                wp_cache_delete( self::OPT_DESIGN_TEMPLATES, 'options' );
+            }
+        }
 
         wp_send_json_success( array(
             'counts'  => $counts,
             'results' => $results,
         ) );
+    }
+
+    public function handle_cleanup() {
+        check_ajax_referer( self::NONCE_KEY, 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Insufficient permissions.' ), 403 );
+        }
+
+        $extract_dir = sanitize_text_field( wp_unslash( $_POST['extract_dir'] ?? '' ) );
+        
+        // Very basic safety check to make sure it's within uploads directory
+        $upload_dir = wp_upload_dir();
+        if ( ! empty( $extract_dir ) && strpos( $extract_dir, $upload_dir['basedir'] ) === 0 ) {
+            $this->cleanup_dir( $extract_dir );
+        }
+
+        wp_send_json_success();
     }
 
     /* --- ZIP extraction --- */
@@ -412,22 +447,23 @@ class Sign_Selector_Importer {
      * @return array{shape:string,number:string,template_id:string,folder_name:string}|false
      */
     private function parse_template_folder_name( $folder_name ) {
-        // Shape words + tier keyword (deluxe|regular|standard) + #number
-        if ( ! preg_match( '/^(.+?)\s+(deluxe|regular|standard)\s+#(\d+)$/i', $folder_name, $m ) ) {
-            return false;
-        }
-
-        $shape  = sanitize_title( trim( $m[1] ) );  // e.g. "rectangle"
-        $tier   = strtolower( trim( $m[2] ) );       // e.g. "deluxe"
-        $number = str_pad( ltrim( $m[3], '0' ) ?: '0', 2, '0', STR_PAD_LEFT );
-
-        return array(
-            'shape'       => $shape,
-            'tier'        => $tier,
-            'number'      => $number,
-            'template_id' => sprintf( 'tpl-%s-%s-%s', $shape, $tier, $number ),
+        $meta = array(
+            'shape'       => '',
+            'tier'        => '',
+            'number'      => '',
+            'template_id' => '',
             'folder_name' => $folder_name,
         );
+
+        // Shape words + tier keyword (deluxe|regular|standard) + #number
+        if ( preg_match( '/^(.+?)\s+(deluxe|regular|standard)\s+#(\d+)$/i', $folder_name, $m ) ) {
+            $meta['shape']       = sanitize_title( trim( $m[1] ) );
+            $meta['tier']        = strtolower( trim( $m[2] ) );
+            $meta['number']      = str_pad( ltrim( $m[3], '0' ) ?: '0', 2, '0', STR_PAD_LEFT );
+            $meta['template_id'] = sprintf( 'tpl-%s-%s-%s', $meta['shape'], $meta['tier'], $meta['number'] );
+        }
+
+        return $meta;
     }
 
     /* --- Template DB helpers --- */
@@ -451,12 +487,31 @@ class Sign_Selector_Importer {
      * @param string $tpl_id     Template ID to find.
      * @return int|false Index or false if not found.
      */
-    private function find_template_index( $templates, $tpl_id ) {
-        foreach ( $templates as $idx => $tpl ) {
-            if ( isset( $tpl['id'] ) && $tpl['id'] === $tpl_id ) {
-                return $idx;
+    private function find_template_index( $templates, $tpl_id, $folder_name = '' ) {
+        if ( $tpl_id ) {
+            foreach ( $templates as $idx => $tpl ) {
+                if ( isset( $tpl['id'] ) && $tpl['id'] === $tpl_id ) {
+                    return $idx;
+                }
             }
         }
+
+        if ( $folder_name ) {
+            $normalized_folder = str_replace( array( '"', "'" ), '', strtolower( $folder_name ) );
+            $normalized_folder = preg_replace( '/\s+/', ' ', trim( $normalized_folder ) );
+
+            foreach ( $templates as $idx => $tpl ) {
+                if ( isset( $tpl['label'] ) ) {
+                    $normalized_label = str_replace( array( '"', "'" ), '', strtolower( $tpl['label'] ) );
+                    $normalized_label = preg_replace( '/\s+/', ' ', trim( $normalized_label ) );
+
+                    if ( $normalized_label === $normalized_folder ) {
+                        return $idx;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -473,7 +528,8 @@ class Sign_Selector_Importer {
      */
     private function process_task( $task, &$templates, $overwrite, $skip_media ) {
         $tpl_id  = $task['tpl_meta']['template_id'];
-        $tpl_idx = $this->find_template_index( $templates, $tpl_id );
+        $folder_name = $task['tpl_meta']['folder_name'];
+        $tpl_idx = $this->find_template_index( $templates, $tpl_id, $folder_name );
         $slate   = $task['slate'];
         $paint   = $task['paint'];
 

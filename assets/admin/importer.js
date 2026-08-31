@@ -89,14 +89,14 @@
         progressCard.style.display = 'block';
         summaryCard.style.display  = 'none';
         importBtn.disabled = true;
-        importBtn.textContent = 'Importing…';
+        importBtn.textContent = 'Uploading…';
         setProgress(0);
-        addLog('info', '🚀 Starting import of ' + file.name + '…');
+        addLog('info', '🚀 Starting upload of ' + file.name + '…');
 
-        const fd = new FormData(form);
-        fd.append('action', cfg.action);
+        const fd = new FormData();
+        fd.append('action', cfg.actionUpload);
         fd.append('nonce',  cfg.nonce);
-        fd.set('zip_file',  file); // ensure it's the actual file object
+        fd.append('zip_file', file);
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', cfg.ajaxUrl, true);
@@ -104,9 +104,9 @@
         // Upload progress
         xhr.upload.addEventListener('progress', function (e) {
             if ( e.lengthComputable ) {
-                const pct = Math.round( (e.loaded / e.total) * 40 ); // 0-40 for upload phase
+                const pct = Math.round( (e.loaded / e.total) * 100 );
                 setProgress(pct);
-                progressTitle.textContent = 'Uploading… ' + pct + '%';
+                progressTitle.textContent = 'Uploading ZIP… ' + pct + '%';
             }
         });
 
@@ -126,7 +126,9 @@
                 return;
             }
 
-            processResults(json.data);
+            const data = json.data;
+            addLog('info', '✅ ZIP extracted. Found ' + data.total_tasks + ' images to process.');
+            processBatches(data.tasks, data.extract_dir);
         });
 
         xhr.addEventListener('error', function () {
@@ -135,13 +137,85 @@
         });
 
         xhr.send(fd);
-
-        // Simulate processing progress (40-90%) while waiting
-        addLog('info', '⏳ ZIP uploaded. Server is extracting and uploading images…');
-        animateProgress(40, 90, 8000);
     }
 
-    function processResults(data) {
+    function processBatches(tasks, extractDir) {
+        let total = tasks.length;
+        if (total === 0) {
+            cleanupImport(extractDir, true);
+            return;
+        }
+
+        let currentIndex = 0;
+        let batchSize = 20;
+        let allResults = [];
+        let allCounts = { success: 0, skipped: 0, error: 0, no_match: 0 };
+
+        function nextBatch() {
+            if (currentIndex >= total) {
+                processResults({ results: allResults, counts: allCounts }, extractDir);
+                return;
+            }
+
+            let batchTasks = tasks.slice(currentIndex, currentIndex + batchSize);
+            let endIdx = Math.min(currentIndex + batchSize, total);
+            
+            progressTitle.textContent = 'Processing ' + currentIndex + ' to ' + endIdx + ' of ' + total + '…';
+            let pct = Math.round( (currentIndex / total) * 100 );
+            setProgress(pct);
+            
+            const fd = new FormData();
+            fd.append('action', cfg.actionProcessBatch);
+            fd.append('nonce',  cfg.nonce);
+            fd.append('extract_dir', extractDir);
+            fd.append('tasks', JSON.stringify(batchTasks));
+            
+            if ( document.getElementById('ss-overwrite').checked ) {
+                fd.append('overwrite', '1');
+            }
+            if ( document.getElementById('ss-skip-media').checked ) {
+                fd.append('skip_media_library', '1');
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', cfg.ajaxUrl, true);
+            xhr.addEventListener('load', function () {
+                let json;
+                try {
+                    json = JSON.parse(xhr.responseText);
+                } catch(e) {
+                    addLog('error', '❌ Batch failed: Invalid server response.');
+                    cleanupImport(extractDir, false);
+                    return;
+                }
+
+                if (!json.success) {
+                    addLog('error', '❌ Batch failed: ' + (json.data && json.data.message ? json.data.message : 'Unknown error'));
+                    cleanupImport(extractDir, false);
+                    return;
+                }
+
+                const data = json.data;
+                allResults = allResults.concat(data.results || []);
+                allCounts.success += (data.counts.success || 0);
+                allCounts.skipped += (data.counts.skipped || 0);
+                allCounts.error += (data.counts.error || 0);
+                allCounts.no_match += (data.counts.no_match || 0);
+
+                currentIndex += batchSize;
+                nextBatch();
+            });
+            xhr.addEventListener('error', function () {
+                addLog('error', '❌ Network error during batch processing.');
+                cleanupImport(extractDir, false);
+            });
+            xhr.send(fd);
+        }
+
+        nextBatch();
+    }
+
+    function processResults(data, extractDir) {
         setProgress(95);
         progressTitle.textContent = 'Finalising…';
 
@@ -181,10 +255,33 @@
             resultsTbody.appendChild(tr);
         });
 
-        setProgress(100);
-        finishImport(true);
-        summaryCard.style.display = 'block';
-        summaryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        cleanupImport(extractDir, true);
+    }
+
+    function cleanupImport(extractDir, success) {
+        if (!extractDir) {
+            finishImport(success);
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('action', cfg.actionCleanup);
+        fd.append('nonce', cfg.nonce);
+        fd.append('extract_dir', extractDir);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', cfg.ajaxUrl, true);
+        xhr.addEventListener('load', function() {
+            finishImport(success);
+            if (success) {
+                summaryCard.style.display = 'block';
+                summaryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        xhr.addEventListener('error', function() {
+            finishImport(success);
+        });
+        xhr.send(fd);
     }
 
     function finishImport(success) {
@@ -198,25 +295,10 @@
     }
 
     // ─── Progress helpers ────────────────────────────────────────
-    let _animTimer = null;
 
     function setProgress(pct) {
         progressBar.style.width = pct + '%';
         progressBar.setAttribute('aria-valuenow', pct);
-    }
-
-    function animateProgress(from, to, durationMs) {
-        if ( _animTimer ) clearInterval(_animTimer);
-        const steps = 60;
-        const stepDur = durationMs / steps;
-        const increment = (to - from) / steps;
-        let current = from;
-        _animTimer = setInterval(function () {
-            current = Math.min(current + increment, to);
-            setProgress(Math.round(current));
-            progressCnt.textContent = Math.round(current) + '%';
-            if ( current >= to ) clearInterval(_animTimer);
-        }, stepDur);
     }
 
     // ─── Log ────────────────────────────────────────────────────
@@ -233,7 +315,6 @@
         logContainer.innerHTML = '';
         resultsTbody.innerHTML = '';
         summaryStats.innerHTML = '';
-        if ( _animTimer ) clearInterval(_animTimer);
     }
 
     function stat(label, count, type) {
