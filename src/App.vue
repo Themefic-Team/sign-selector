@@ -2049,11 +2049,10 @@ const onSubmit = async () => {
   object-position: center;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.22);
   border-radius: inherit;
-  transition: opacity 0.2s ease-in-out;
 }
 
 .preview-combination-img.is-loading {
-  opacity: 0.3;
+  /* opacity issue removed */
 }
 
 .preview-loader-overlay {
