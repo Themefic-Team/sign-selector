@@ -584,6 +584,20 @@ class Sign_Selector_Importer {
             }
         }
 
+        // If overwrite is checked, remove the specific existing variant image first
+        if ( $overwrite ) {
+            $combo_key = $slate . '_' . $paint;
+            $existing_map = isset( $templates[ $tpl_idx ]['combinationImages'] ) ? (array) $templates[ $tpl_idx ]['combinationImages'] : array();
+            $existing_url = $existing_map[ $combo_key ] ?? '';
+            
+            if ( '' !== $existing_url ) {
+                $attachment_id = attachment_url_to_postid( $existing_url );
+                if ( $attachment_id ) {
+                    wp_delete_attachment( $attachment_id, true );
+                }
+            }
+        }
+
         // Upload to Media Library
         $url = $this->upload_image( $task['file_path'], $task['file_name'] );
         if ( is_wp_error( $url ) ) {
@@ -695,4 +709,6 @@ class Sign_Selector_Importer {
         rmdir( $dir );
     }
 }
+
+
 
